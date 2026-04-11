@@ -249,11 +249,12 @@ export default function AddBookDialog({ open, onOpenChange }: AddBookDialogProps
                   name="language"
                   control={control}
                   render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
+                    <Select value={field.value || "__none__"} onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select language" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="__none__">Not set</SelectItem>
                         {(["German", "Spanish", "English"] as BookLanguage[]).map((l) => (
                           <SelectItem key={l} value={l}>
                             {l}
@@ -272,11 +273,12 @@ export default function AddBookDialog({ open, onOpenChange }: AddBookDialogProps
                   name="format"
                   control={control}
                   render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
+                    <Select value={field.value || "__none__"} onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select format" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="__none__">Not set</SelectItem>
                         {(["eBook", "Audiobook", "Paperback", "Hardcover"] as BookFormat[]).map(
                           (f) => (
                             <SelectItem key={f} value={f}>
@@ -297,11 +299,12 @@ export default function AddBookDialog({ open, onOpenChange }: AddBookDialogProps
                   name="belongs_to"
                   control={control}
                   render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
+                    <Select value={field.value || "__none__"} onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select owner" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="__none__">Not set</SelectItem>
                         {(["Me", "Family", "Friends", "Library"] as BookBelongsTo[]).map((b) => (
                           <SelectItem key={b} value={b}>
                             {b}
@@ -357,10 +360,12 @@ export default function AddBookDialog({ open, onOpenChange }: AddBookDialogProps
                   control={control}
                   render={({ field }) => (
                     <Select
-                      value={field.value}
+                      value={field.value || "__none__"}
                       onValueChange={(v) => {
                         if (v === "__new__") {
                           setAddingNewSeries(true);
+                        } else if (v === "__none__") {
+                          field.onChange("");
                         } else {
                           field.onChange(v);
                         }
@@ -370,6 +375,7 @@ export default function AddBookDialog({ open, onOpenChange }: AddBookDialogProps
                         <SelectValue placeholder="None" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="__none__">None</SelectItem>
                         {series.map((s) => (
                           <SelectItem key={s.id} value={s.id}>
                             {s.name}
