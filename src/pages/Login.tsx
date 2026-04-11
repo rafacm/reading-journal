@@ -18,11 +18,12 @@ export default function Login() {
   const { register, handleSubmit, formState, setError } = useForm<LoginFormValues>();
 
   // Already authenticated — redirect away from login
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? "/";
   useEffect(() => {
     if (!loading && user) {
-      navigate("/", { replace: true });
+      navigate(from, { replace: true });
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, navigate, from]);
 
   if (loading) {
     return (
@@ -36,11 +37,8 @@ export default function Login() {
     const { error } = await signIn(values.email, values.password);
     if (error) {
       setError("root", { message: error.message });
-      return;
     }
-    // Redirect back to the page the user was trying to reach, or home
-    const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? "/";
-    navigate(from, { replace: true });
+    // Redirect is handled by the useEffect above when user state updates
   };
 
   return (
