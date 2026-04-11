@@ -19,7 +19,8 @@ The app is designed to be fully usable on **mobile and tablet browsers**, in add
 
 ### 1. Authentication & Multi-User Support
 - **Initial Page:** A welcoming landing page explaining what the "Reading Journal" is, featuring introductory text and preview images.
-- **Auth Flow:** Log In and Sign Up buttons.
+- **Auth Flow:** Log In button only. Public sign-ups are disabled — new users are added via invite only.
+- **Invite-Only Access:** Sign-ups are disabled in the Supabase dashboard. New users are invited via the Supabase Admin API (`supabase.auth.admin.inviteUserByEmail()`), called from a server-side script or Supabase Edge Function using the service role key.
 - **Multi-Account Support:** Handled securely via Supabase Authentication (Email/Password). Each user's data will be isolated in the Supabase PostgreSQL database using Row Level Security (RLS).
 
 ### 2. Dashboard (Start Page)

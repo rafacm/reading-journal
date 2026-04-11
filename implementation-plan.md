@@ -24,7 +24,10 @@
    - Create the `series` table.
    - Create the `reading_logs` table (timestamp, book_id, current_page, reading_time_minutes).
 2. **Set up Row Level Security (RLS):** - Write security policies in Supabase to ensure users can only read, edit, insert, and delete their own data based on their `user_id`.
-3. **Build Auth Flows:** - Create the Log In and Sign Up pages.
+3. **Build Auth Flows:**
+   - In the Supabase dashboard, disable public sign-ups (Authentication → Settings → disable "Enable Sign Ups").
+   - Create the Log In page only (no public Sign Up page).
+   - Invite new users via the Supabase Admin API (`supabase.auth.admin.inviteUserByEmail()`) using the service role key — call this from a server-side script or Supabase Edge Function, never from the client.
    - Implement protected routing in React so unauthenticated users cannot access the dashboard or library.
 
 ## 🛠️ Phase 3: Core Functionality (CRUD Operations)
