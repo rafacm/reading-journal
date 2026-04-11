@@ -10,8 +10,9 @@
 
 1. **Initialize the Frontend:** - Spin up a Vite + React environment.
    - Set up TypeScript (recommended for stricter data management) or standard JavaScript.
-2. **Install Tailwind & UI Components:** - Configure Tailwind CSS.
+2. **Install Tailwind & UI Components:** - Configure Tailwind CSS with a **mobile-first** approach (use responsive prefixes `sm:`, `md:`, `lg:` to scale up to tablet and desktop).
    - Initialize `shadcn/ui` to prepare foundational UI components (cards, buttons, forms, dialog modals, etc.).
+   - Ensure all interactive elements are touch-friendly (adequate tap target sizes, no hover-only interactions).
 3. **Create the Supabase Project:** - Create a new project in the Supabase dashboard.
    - Retrieve the API keys and URL, and add them to a local `.env` file in the React project.
 4. **Initialize Version Control:** - Set up Git to track progress and prepare for future Vercel deployment.

@@ -12,6 +12,9 @@ The Reading Journal Web App is a dedicated platform designed to store, document,
 - **External APIs:** Google Books API / Open Library API (for ISBN fetching)
 - **Barcode Scanning:** `html5-qrcode` (or similar browser-based camera library)
 
+## 📱 Platform & Compatibility
+The app is designed to be fully usable on **mobile and tablet browsers**, in addition to desktop. All UI layouts must be responsive, with touch-friendly interactions. The barcode scanner feature is primarily intended for mobile use (device camera access).
+
 ## 🚀 Core Features & Requirements
 
 ### 1. Authentication & Multi-User Support
