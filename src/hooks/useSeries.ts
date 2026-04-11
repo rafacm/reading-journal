@@ -7,12 +7,16 @@ export function useSeries() {
   const { user } = useAuth();
   const [series, setSeries] = useState<Series[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
+    setError(null);
     fetchSeries()
       .then(setSeries)
-      .catch(() => {})
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Failed to load series");
+      })
       .finally(() => setLoading(false));
   }, [user]);
 
@@ -23,5 +27,5 @@ export function useSeries() {
     return created;
   }, [user]);
 
-  return { series, loading, addSeries };
+  return { series, loading, error, addSeries };
 }
