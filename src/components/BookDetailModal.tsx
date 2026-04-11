@@ -368,11 +368,12 @@ export default function BookDetailModal({
                       name="language"
                       control={control}
                       render={({ field }) => (
-                        <Select value={field.value} onValueChange={field.onChange}>
+                        <Select value={field.value || "__none__"} onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)}>
                           <SelectTrigger>
                             <SelectValue placeholder="Not set" />
                           </SelectTrigger>
                           <SelectContent>
+                            <SelectItem value="__none__">Not set</SelectItem>
                             {(["German", "Spanish", "English"] as BookLanguage[]).map((l) => (
                               <SelectItem key={l} value={l}>
                                 {l}
@@ -391,11 +392,12 @@ export default function BookDetailModal({
                       name="format"
                       control={control}
                       render={({ field }) => (
-                        <Select value={field.value} onValueChange={field.onChange}>
+                        <Select value={field.value || "__none__"} onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)}>
                           <SelectTrigger>
                             <SelectValue placeholder="Not set" />
                           </SelectTrigger>
                           <SelectContent>
+                            <SelectItem value="__none__">Not set</SelectItem>
                             {(["eBook", "Audiobook", "Paperback", "Hardcover"] as BookFormat[]).map(
                               (f) => (
                                 <SelectItem key={f} value={f}>
@@ -416,11 +418,12 @@ export default function BookDetailModal({
                       name="belongs_to"
                       control={control}
                       render={({ field }) => (
-                        <Select value={field.value} onValueChange={field.onChange}>
+                        <Select value={field.value || "__none__"} onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)}>
                           <SelectTrigger>
                             <SelectValue placeholder="Not set" />
                           </SelectTrigger>
                           <SelectContent>
+                            <SelectItem value="__none__">Not set</SelectItem>
                             {(["Me", "Family", "Friends", "Library"] as BookBelongsTo[]).map((b) => (
                               <SelectItem key={b} value={b}>
                                 {b}
@@ -465,11 +468,12 @@ export default function BookDetailModal({
                       name="series_id"
                       control={control}
                       render={({ field }) => (
-                        <Select value={field.value} onValueChange={field.onChange}>
+                        <Select value={field.value || "__none__"} onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)}>
                           <SelectTrigger>
                             <SelectValue placeholder="None" />
                           </SelectTrigger>
                           <SelectContent>
+                            <SelectItem value="__none__">None</SelectItem>
                             {series.map((s) => (
                               <SelectItem key={s.id} value={s.id}>
                                 {s.name}
