@@ -2,7 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { ImagePlus, ScanBarcode, Loader2 } from "lucide-react";
 import BarcodeScanner from "@/components/BarcodeScanner";
-import { fetchBookByISBN } from "@/lib/openLibrary";
+import { fetchBookByISBN } from "@/lib/bookLookup";
 import {
   Dialog,
   DialogContent,

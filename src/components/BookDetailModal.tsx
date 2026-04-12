@@ -252,12 +252,12 @@ export default function BookDetailModal({
               <p className="text-sm text-muted-foreground">{book.author}</p>
               {book.isbn && (
                 <a
-                  href={`https://openlibrary.org/isbn/${book.isbn}`}
+                  href={`https://books.google.com/books?vid=ISBN${book.isbn}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  Open Library
+                  Google Books
                   <ExternalLink className="h-3 w-3" />
                 </a>
               )}

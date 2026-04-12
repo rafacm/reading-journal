@@ -1,0 +1,73 @@
+export interface BookLookupResult {
+  title: string;
+  author: string;
+  totalPages?: number;
+  genre?: string;
+  language?: string;
+  format?: string;
+  coverUrl?: string;
+}
+
+interface GoogleBooksVolume {
+  items?: {
+    volumeInfo: {
+      title?: string;
+      authors?: string[];
+      pageCount?: number;
+      categories?: string[];
+      language?: string;
+    };
+  }[];
+}
+
+interface BookcoverResponse {
+  url?: string;
+}
+
+const languageMap: Record<string, string> = {
+  en: "English",
+  es: "Spanish",
+  de: "German",
+};
+
+async function fetchGoogleBooksMetadata(
+  isbn: string,
+): Promise<GoogleBooksVolume["items"]> {
+  const res = await fetch(
+    `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`,
+  );
+  if (!res.ok) return undefined;
+  const data: GoogleBooksVolume = await res.json();
+  return data.items;
+}
+
+async function fetchBookcoverUrl(isbn: string): Promise<string | null> {
+  const res = await fetch(
+    `https://bookcover.longitood.com/bookcover?isbn=${isbn}`,
+  );
+  if (!res.ok) return null;
+  const data: BookcoverResponse = await res.json();
+  return data.url ?? null;
+}
+
+export async function fetchBookByISBN(
+  isbn: string,
+): Promise<BookLookupResult | null> {
+  const [items, coverUrl] = await Promise.all([
+    fetchGoogleBooksMetadata(isbn),
+    fetchBookcoverUrl(isbn).catch(() => null),
+  ]);
+
+  if (!items || items.length === 0) return null;
+
+  const info = items[0].volumeInfo;
+
+  return {
+    title: info.title ?? "Untitled",
+    author: info.authors?.[0] ?? "Unknown",
+    totalPages: info.pageCount,
+    genre: info.categories?.[0],
+    language: info.language ? languageMap[info.language] : undefined,
+    coverUrl: coverUrl ?? undefined,
+  };
+}
