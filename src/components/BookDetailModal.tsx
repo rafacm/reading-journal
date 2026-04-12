@@ -39,9 +39,7 @@ interface FormValues {
   format: BookFormat | "";
   belongs_to: BookBelongsTo | "";
   total_pages: string;
-  total_chapters: string;
   current_page: string;
-  current_chapter: string;
   date_started: string;
   date_finished: string;
   series_id: string;
@@ -109,9 +107,7 @@ export default function BookDetailModal({
         format: book.format ?? "",
         belongs_to: book.belongs_to ?? "",
         total_pages: book.total_pages?.toString() ?? "",
-        total_chapters: book.total_chapters?.toString() ?? "",
         current_page: book.current_page?.toString() ?? "",
-        current_chapter: book.current_chapter?.toString() ?? "",
         date_started: book.date_started ?? "",
         date_finished: book.date_finished ?? "",
         series_id: book.series_id ?? "",
@@ -173,9 +169,7 @@ export default function BookDetailModal({
     if (dirtyFields.format) payload.format = (values.format as BookFormat) || undefined;
     if (dirtyFields.belongs_to) payload.belongs_to = (values.belongs_to as BookBelongsTo) || undefined;
     if (dirtyFields.total_pages) payload.total_pages = values.total_pages ? Number(values.total_pages) : undefined;
-    if (dirtyFields.total_chapters) payload.total_chapters = values.total_chapters ? Number(values.total_chapters) : undefined;
     if (dirtyFields.current_page) payload.current_page = values.current_page ? Number(values.current_page) : undefined;
-    if (dirtyFields.current_chapter) payload.current_chapter = values.current_chapter ? Number(values.current_chapter) : undefined;
     if (dirtyFields.date_started) payload.date_started = values.date_started || undefined;
     if (dirtyFields.date_finished) payload.date_finished = values.date_finished || undefined;
     if (dirtyFields.series_id) payload.series_id = values.series_id || undefined;
@@ -328,21 +322,6 @@ export default function BookDetailModal({
                             {...register("current_page")}
                           />
                         </div>
-                        <div className="space-y-1">
-                          <Label htmlFor="current_chapter" className="text-xs">
-                            Current chapter
-                            {book.total_chapters != null && (
-                              <span className="text-muted-foreground"> / {book.total_chapters}</span>
-                            )}
-                          </Label>
-                          <Input
-                            id="current_chapter"
-                            type="number"
-                            min={0}
-                            max={book.total_chapters ?? undefined}
-                            {...register("current_chapter")}
-                          />
-                        </div>
                       </div>
                     </div>
                   )}
@@ -486,16 +465,10 @@ export default function BookDetailModal({
                     />
                   </div>
 
-                  {/* Pages / Chapters */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="detail-total_pages">Total pages</Label>
-                      <Input id="detail-total_pages" type="number" min={1} {...register("total_pages")} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="detail-total_chapters">Total chapters</Label>
-                      <Input id="detail-total_chapters" type="number" min={1} {...register("total_chapters")} />
-                    </div>
+                  {/* Pages */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="detail-total_pages">Total pages</Label>
+                    <Input id="detail-total_pages" type="number" min={1} {...register("total_pages")} />
                   </div>
 
                   {/* Dates */}

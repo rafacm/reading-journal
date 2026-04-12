@@ -28,8 +28,6 @@ CREATE TABLE IF NOT EXISTS books (
   is_favorite     boolean NOT NULL DEFAULT false,
   current_page    integer CHECK (current_page >= 0),
   total_pages     integer CHECK (total_pages > 0),
-  current_chapter integer CHECK (current_chapter >= 0),
-  total_chapters  integer CHECK (total_chapters > 0),
   date_started    date,
   date_finished   date,
   language        text CHECK (language IN ('German','Spanish','English')),
