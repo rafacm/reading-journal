@@ -31,8 +31,6 @@ export interface Book {
   is_favorite: boolean;
   current_page?: number;
   total_pages?: number;
-  current_chapter?: number;
-  total_chapters?: number;
   date_started?: string;
   date_finished?: string;
   language?: BookLanguage;

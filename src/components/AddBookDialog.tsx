@@ -34,9 +34,7 @@ interface FormValues {
   format: BookFormat | "";
   belongs_to: BookBelongsTo | "";
   total_pages: string;
-  total_chapters: string;
   current_page: string;
-  current_chapter: string;
   date_started: string;
   date_finished: string;
   series_id: string;
@@ -175,9 +173,7 @@ export default function AddBookDialog({ open, onOpenChange }: AddBookDialogProps
           format: (values.format as BookFormat) || undefined,
           belongs_to: (values.belongs_to as BookBelongsTo) || undefined,
           total_pages: values.total_pages ? Number(values.total_pages) : undefined,
-          total_chapters: values.total_chapters ? Number(values.total_chapters) : undefined,
           current_page: values.current_page ? Number(values.current_page) : undefined,
-          current_chapter: values.current_chapter ? Number(values.current_chapter) : undefined,
           date_started: values.date_started || undefined,
           date_finished: values.date_finished || undefined,
           series_id: values.series_id || undefined,
@@ -450,49 +446,27 @@ export default function AddBookDialog({ open, onOpenChange }: AddBookDialogProps
                 />
               </div>
 
-              {/* Pages / Chapters */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="total_pages">Total pages</Label>
-                  <Input
-                    id="total_pages"
-                    type="number"
-                    min={1}
-                    {...register("total_pages")}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="total_chapters">Total chapters</Label>
-                  <Input
-                    id="total_chapters"
-                    type="number"
-                    min={1}
-                    {...register("total_chapters")}
-                  />
-                </div>
+              {/* Pages */}
+              <div className="space-y-1.5">
+                <Label htmlFor="total_pages">Total pages</Label>
+                <Input
+                  id="total_pages"
+                  type="number"
+                  min={1}
+                  {...register("total_pages")}
+                />
               </div>
 
               {/* Current progress (Reading only) */}
               {status === "Reading" && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="current_page">Current page</Label>
-                    <Input
-                      id="current_page"
-                      type="number"
-                      min={0}
-                      {...register("current_page")}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="current_chapter">Current chapter</Label>
-                    <Input
-                      id="current_chapter"
-                      type="number"
-                      min={0}
-                      {...register("current_chapter")}
-                    />
-                  </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="current_page">Current page</Label>
+                  <Input
+                    id="current_page"
+                    type="number"
+                    min={0}
+                    {...register("current_page")}
+                  />
                 </div>
               )}
 

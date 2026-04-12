@@ -30,7 +30,7 @@ Environment variables go in `.env` — Supabase URL and anon key from the Supaba
 
 ### Database Schema (Supabase/PostgreSQL)
 
-**`books`** — core entity: title, author, genre, status, cover_url (Supabase Storage), rating (1–5), is_favorite (heart toggle), current_page, total_pages, current_chapter, total_chapters, date_started, date_finished, language, belongs_to, format, series_id, volume_number, user_id
+**`books`** — core entity: title, author, genre, status, cover_url (Supabase Storage), rating (1–5), is_favorite (heart toggle), current_page, total_pages, date_started, date_finished, language, belongs_to, format, series_id, volume_number, user_id
 
 **`series`** — series name, overarching properties, journal content, user_id
 
