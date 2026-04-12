@@ -46,7 +46,7 @@ export async function deleteBook(id: string): Promise<void> {
 // ── Cover Storage ──────────────────────────────────────────────────────────
 
 function coverPath(userId: string, bookId: string, ext: string): string {
-  return `covers/${userId}/${bookId}.${ext}`;
+  return `${userId}/${bookId}.${ext}`;
 }
 
 const VALID_IMAGE_EXTENSIONS = ["jpg", "jpeg", "png", "webp", "avif"];

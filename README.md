@@ -117,6 +117,16 @@ Cover images are stored in Supabase Storage. The bucket must be created manually
 2. **Add RLS policies** — run in the SQL Editor:
 
 ```sql
+-- Allow authenticated users to read covers in their own folder
+CREATE POLICY "covers: owner select"
+ON storage.objects
+FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'covers'
+  AND (storage.foldername(name))[1] = auth.uid()::text
+);
+
 -- Allow authenticated users to upload covers to their own folder
 CREATE POLICY "covers: owner insert"
 ON storage.objects
@@ -127,7 +137,21 @@ WITH CHECK (
   AND (storage.foldername(name))[1] = auth.uid()::text
 );
 
--- Allow authenticated users to delete/replace their own covers
+-- Allow authenticated users to update (upsert) their own covers
+CREATE POLICY "covers: owner update"
+ON storage.objects
+FOR UPDATE
+TO authenticated
+USING (
+  bucket_id = 'covers'
+  AND (storage.foldername(name))[1] = auth.uid()::text
+)
+WITH CHECK (
+  bucket_id = 'covers'
+  AND (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- Allow authenticated users to delete their own covers
 CREATE POLICY "covers: owner delete"
 ON storage.objects
 FOR DELETE
@@ -138,7 +162,7 @@ USING (
 );
 ```
 
-The upload path format is `covers/{user_id}/{book_id}.{ext}`, so these policies ensure users can only write to their own folder. No SELECT policy is needed since the bucket is public.
+The upload path format is `{user_id}/{book_id}.{ext}` (within the `covers` bucket), so these policies ensure users can only access their own folder. All four policies (SELECT, INSERT, UPDATE, DELETE) are required — SELECT and UPDATE are needed for the upsert logic used during cover uploads.
 
 #### Environment Variables
 
