@@ -36,6 +36,7 @@ interface FormValues {
   author: string;
   status: BookStatus;
   genre: string;
+  isbn: string;
   language: BookLanguage | "";
   format: BookFormat | "";
   belongs_to: BookBelongsTo | "";
@@ -103,6 +104,7 @@ export default function BookDetailModal({
         author: book.author,
         status: book.status,
         genre: book.genre ?? "",
+        isbn: book.isbn ?? "",
         language: book.language ?? "",
         format: book.format ?? "",
         belongs_to: book.belongs_to ?? "",
@@ -164,6 +166,7 @@ export default function BookDetailModal({
     if (dirtyFields.author) payload.author = values.author;
     if (dirtyFields.status) payload.status = values.status;
     if (dirtyFields.genre) payload.genre = values.genre || undefined;
+    if (dirtyFields.isbn) payload.isbn = values.isbn.trim() || undefined;
     if (dirtyFields.language) payload.language = (values.language as BookLanguage) || undefined;
     if (dirtyFields.format) payload.format = (values.format as BookFormat) || undefined;
     if (dirtyFields.belongs_to) payload.belongs_to = (values.belongs_to as BookBelongsTo) || undefined;
@@ -500,6 +503,18 @@ export default function BookDetailModal({
                       <Input id="detail-volume_number" type="number" min={0.5} step="any" {...register("volume_number")} />
                     </div>
                   )}
+
+                  {/* ISBN */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="detail-isbn">ISBN</Label>
+                    <Input
+                      id="detail-isbn"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      placeholder="978..."
+                      {...register("isbn")}
+                    />
+                  </div>
                 </div>
               </ScrollArea>
 
