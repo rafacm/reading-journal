@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollWheelPicker } from "@/components/ui/scroll-wheel-picker";
 import { createReadingLog, fetchLastReadingLog } from "@/lib/books";
@@ -18,6 +19,11 @@ function buildPageItems(min: number, max: number) {
     items.push({ value: p, label: String(p) });
   }
   return items;
+}
+
+function toDateTimeLocalValue(date: Date): string {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 16);
 }
 
 const HOUR_ITEMS = Array.from({ length: 7 }, (_, i) => ({
@@ -51,6 +57,10 @@ export default function ReadingProgressPanel({
   const [selectedPage, setSelectedPage] = useState(startPage);
   const [selectedHours, setSelectedHours] = useState(0);
   const [selectedMinutes, setSelectedMinutes] = useState(0);
+  const [showLoggedAtEditor, setShowLoggedAtEditor] = useState(false);
+  const [selectedLoggedAt, setSelectedLoggedAt] = useState(() =>
+    toDateTimeLocalValue(new Date())
+  );
 
   // Fetch last reading log on mount
   useEffect(() => {
@@ -76,6 +86,8 @@ export default function ReadingProgressPanel({
       setSelectedPage(Math.min(min + 1, totalPages));
       setSelectedHours(0);
       setSelectedMinutes(0);
+      setShowLoggedAtEditor(false);
+      setSelectedLoggedAt(toDateTimeLocalValue(new Date()));
       setErrorMsg(null);
     }
   }, [expanded, lastLog, currentPage, totalPages]);
@@ -91,11 +103,22 @@ export default function ReadingProgressPanel({
       setSaving(true);
       setErrorMsg(null);
       const timeMinutes = selectedHours * 60 + selectedMinutes;
+      let loggedAtIso: string | undefined;
+
+      if (showLoggedAtEditor && selectedLoggedAt) {
+        const parsedDate = new Date(selectedLoggedAt);
+        if (Number.isNaN(parsedDate.getTime())) {
+          throw new Error("Invalid date/time for progress entry");
+        }
+        loggedAtIso = parsedDate.toISOString();
+      }
+
       await createReadingLog(
         book.id,
         user.id,
         selectedPage,
-        timeMinutes > 0 ? timeMinutes : undefined
+        timeMinutes > 0 ? timeMinutes : undefined,
+        loggedAtIso
       );
       await onProgressSaved(selectedPage);
       // Update lastLog locally so the min page updates
@@ -104,7 +127,7 @@ export default function ReadingProgressPanel({
         book_id: book.id,
         user_id: user.id,
         current_page: selectedPage,
-        logged_at: new Date().toISOString(),
+        logged_at: loggedAtIso ?? new Date().toISOString(),
       });
       setExpanded(false);
     } catch (err) {
@@ -180,6 +203,33 @@ export default function ReadingProgressPanel({
                 className="flex-1"
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            {!showLoggedAtEditor && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowLoggedAtEditor(true)}
+              >
+                Change Finished Time
+              </Button>
+            )}
+
+            {showLoggedAtEditor && (
+              <div className="space-y-1.5">
+                <Label htmlFor="progress-logged-at" className="text-xs text-muted-foreground">
+                  Finished at (optional)
+                </Label>
+                <Input
+                  id="progress-logged-at"
+                  type="datetime-local"
+                  value={selectedLoggedAt}
+                  onChange={(event) => setSelectedLoggedAt(event.target.value)}
+                />
+              </div>
+            )}
           </div>
 
           {errorMsg && (
