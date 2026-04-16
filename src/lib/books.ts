@@ -107,7 +107,8 @@ export async function createReadingLog(
   bookId: string,
   userId: string,
   currentPage: number,
-  readingTimeMinutes?: number
+  readingTimeMinutes?: number,
+  loggedAt?: string
 ): Promise<ReadingLog> {
   const { data, error } = await supabase
     .from("reading_logs")
@@ -116,6 +117,7 @@ export async function createReadingLog(
       user_id: userId,
       current_page: currentPage,
       reading_time_minutes: readingTimeMinutes,
+      ...(loggedAt ? { logged_at: loggedAt } : {}),
     })
     .select()
     .single();
