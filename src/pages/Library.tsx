@@ -42,6 +42,10 @@ export default function Library() {
     setModalOpen(true);
   }
 
+  const allBooks = [...books].sort((a, b) =>
+    a.title.localeCompare(b.title, undefined, { sensitivity: "base", numeric: true })
+  );
+
   const tbrBooks = books.filter((b) =>
     ["Wishlist", "Not Started", "Up Next"].includes(b.status)
   );
@@ -102,7 +106,7 @@ export default function Library() {
             ) : books.length === 0 ? (
               <EmptyTab message="No books yet. Tap + to add one." />
             ) : (
-              <BooksGrid books={books} onBook={openBook} />
+              <BooksGrid books={allBooks} onBook={openBook} />
             )}
           </ScrollArea>
         </TabsContent>
