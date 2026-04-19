@@ -400,16 +400,15 @@ export default function BookDetails() {
               </div>
             </div>
             <Progress value={progressPercent} className="h-1.5" />
+            {status === "Reading" && (
+              <ReadingProgressPanel
+                book={book}
+                onProgressSaved={async (newPage) => {
+                  await updateBook(book.id, { current_page: newPage });
+                }}
+              />
+            )}
           </section>
-
-          {status === "Reading" && (
-            <ReadingProgressPanel
-              book={book}
-              onProgressSaved={async (newPage) => {
-                await updateBook(book.id, { current_page: newPage });
-              }}
-            />
-          )}
         </div>
       </div>
 

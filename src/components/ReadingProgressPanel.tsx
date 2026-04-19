@@ -3,7 +3,6 @@ import { BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import { ScrollWheelPicker } from "@/components/ui/scroll-wheel-picker";
 import { createReadingLog, fetchLastReadingLog } from "@/lib/books";
 import { useAuth } from "@/context/AuthContext";
@@ -48,15 +47,10 @@ export default function ReadingProgressPanel({
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const currentPage = book.current_page ?? 0;
   const totalPages = book.total_pages ?? 0;
-  const progressPercent =
-    totalPages > 0
-      ? Math.min(100, Math.max(0, Math.round((currentPage / totalPages) * 100)))
-      : 0;
 
   // Initial page value: start one step above current
-  const minPage = Math.max(currentPage, lastLog?.current_page ?? 0);
+  const minPage = Math.max(book.current_page ?? 0, lastLog?.current_page ?? 0);
   const startPage = Math.min(minPage + 1, totalPages);
 
   const [selectedPage, setSelectedPage] = useState(startPage);
@@ -87,7 +81,7 @@ export default function ReadingProgressPanel({
   // Reset picker values when expanding or when lastLog loads
   useEffect(() => {
     if (expanded) {
-      const min = Math.max(currentPage, lastLog?.current_page ?? 0);
+      const min = Math.max(book.current_page ?? 0, lastLog?.current_page ?? 0);
       setSelectedPage(Math.min(min + 1, totalPages));
       setSelectedHours(0);
       setSelectedMinutes(0);
@@ -95,7 +89,7 @@ export default function ReadingProgressPanel({
       setSelectedLoggedAt(toDateTimeLocalValue(new Date()));
       setErrorMsg(null);
     }
-  }, [expanded, lastLog, currentPage, totalPages]);
+  }, [expanded, lastLog, book.current_page, totalPages]);
 
   const pageItems = useMemo(
     () => buildPageItems(minPage + 1, totalPages),
@@ -144,8 +138,8 @@ export default function ReadingProgressPanel({
 
   if (totalPages === 0) {
     return (
-      <div className="rounded-lg border bg-muted/40 p-3">
-        <p className="text-sm text-muted-foreground">
+      <div className="rounded-md border bg-background/80 px-3 py-2">
+        <p className="text-xs text-muted-foreground">
           Set the total pages to track progress.
         </p>
       </div>
@@ -153,39 +147,22 @@ export default function ReadingProgressPanel({
   }
 
   return (
-    <div className="rounded-lg border bg-muted/40 p-3 space-y-3">
-      {/* Header with current progress */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-0.5">
-          <p className="text-sm font-medium">Reading progress</p>
-          <p className="text-xs text-muted-foreground">
-            Page {currentPage} of {totalPages}
-          </p>
-          <div className="mt-2 flex items-center gap-2">
-            <Progress value={progressPercent} className="h-1.5" />
-            <span className="text-xs font-medium text-muted-foreground tabular-nums">
-              {progressPercent}%
-            </span>
-          </div>
-        </div>
-        {!expanded && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={loadingLog}
-            onClick={() => setExpanded(true)}
-          >
-            <BookOpen className="h-3.5 w-3.5 mr-1.5" />
-            Update progress
-          </Button>
-        )}
-      </div>
+    <div className="space-y-3">
+      {!expanded && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={loadingLog}
+          onClick={() => setExpanded(true)}
+        >
+          <BookOpen className="h-3.5 w-3.5 mr-1.5" />
+          Update progress
+        </Button>
+      )}
 
-      {/* Expanded picker panel */}
       {expanded && (
-        <div className="space-y-4 pt-1">
-          {/* Page picker */}
+        <div className="space-y-4 rounded-lg border bg-background/80 p-3">
           <div className="space-y-1.5">
             <Label className="text-xs">Read up to page</Label>
             <ScrollWheelPicker
@@ -195,7 +172,6 @@ export default function ReadingProgressPanel({
             />
           </div>
 
-          {/* Time picker */}
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">
               Time spent reading (optional)
@@ -247,7 +223,6 @@ export default function ReadingProgressPanel({
             <p className="text-xs text-destructive">{errorMsg}</p>
           )}
 
-          {/* Action buttons */}
           <div className="flex gap-2 justify-end">
             <Button
               type="button"
