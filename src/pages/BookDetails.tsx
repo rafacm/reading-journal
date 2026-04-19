@@ -27,7 +27,7 @@ import {
 import { useBooksContext } from "@/context/BooksContext";
 import { useSeries } from "@/hooks/useSeries";
 import { formatGenresInput, parseGenresInput, statusVariant } from "@/lib/utils";
-import ReadingProgressPanel from "@/components/ReadingProgressPanel";
+import ReadingProgressDialog from "@/components/ReadingProgressDialog";
 import BookAnalyticsPanel from "@/components/BookAnalyticsPanel";
 import type {
   Book,
@@ -401,11 +401,16 @@ export default function BookDetails() {
             </div>
             <Progress value={progressPercent} className="h-1.5" />
             {status === "Reading" && (
-              <ReadingProgressPanel
+              <ReadingProgressDialog
                 book={book}
                 onProgressSaved={async (newPage) => {
                   await updateBook(book.id, { current_page: newPage });
                 }}
+                trigger={
+                  <Button type="button" variant="outline" size="sm">
+                    Update progress
+                  </Button>
+                }
               />
             )}
           </section>

@@ -13,6 +13,7 @@ interface ReadingProgressPanelProps {
   onProgressSaved: (newCurrentPage: number) => void;
   defaultExpanded?: boolean;
   hideTrigger?: boolean;
+  onCancel?: () => void;
 }
 
 function buildPageItems(min: number, max: number) {
@@ -43,6 +44,7 @@ export default function ReadingProgressPanel({
   onProgressSaved,
   defaultExpanded = false,
   hideTrigger = false,
+  onCancel,
 }: ReadingProgressPanelProps) {
   const { user } = useAuth();
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -233,7 +235,13 @@ export default function ReadingProgressPanel({
               variant="ghost"
               size="sm"
               disabled={saving}
-              onClick={() => setExpanded(false)}
+              onClick={() => {
+                if (onCancel) {
+                  onCancel();
+                  return;
+                }
+                setExpanded(false);
+              }}
             >
               Cancel
             </Button>

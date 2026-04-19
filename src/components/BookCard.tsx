@@ -1,15 +1,8 @@
-import { useState } from "react";
 import { BookOpen, Heart } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import ReadingProgressPanel from "@/components/ReadingProgressPanel";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import ReadingProgressDialog from "@/components/ReadingProgressDialog";
 import { Button } from "@/components/ui/button";
 import { useBooksContext } from "@/context/BooksContext";
 import { statusVariant } from "@/lib/utils";
@@ -27,7 +20,6 @@ export default function BookCard({
   showQuickProgress = false,
 }: BookCardProps) {
   const { updateBook } = useBooksContext();
-  const [progressDialogOpen, setProgressDialogOpen] = useState(false);
 
   const currentPage = Math.max(0, book.current_page ?? 0);
   const totalPages = Math.max(0, book.total_pages ?? 0);
@@ -88,41 +80,28 @@ export default function BookCard({
             <p className="hidden text-[11px] text-center text-muted-foreground truncate sm:block">
               {currentPage} / {hasTotalPages ? totalPages : "-"}
             </p>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-7 px-2 text-[11px]"
-              onClick={(event) => {
-                event.stopPropagation();
-                setProgressDialogOpen(true);
+            <ReadingProgressDialog
+              book={book}
+              onProgressSaved={async (newPage) => {
+                await updateBook(book.id, { current_page: newPage });
               }}
-            >
-              Update Progress
-            </Button>
+              trigger={
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-[11px]"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                  }}
+                >
+                  Update Progress
+                </Button>
+              }
+            />
           </div>
         </div>
       )}
-
-      <Dialog open={progressDialogOpen} onOpenChange={setProgressDialogOpen}>
-        <DialogContent
-          className="sm:max-w-md"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <DialogHeader>
-            <DialogTitle>Update progress</DialogTitle>
-          </DialogHeader>
-          <ReadingProgressPanel
-            book={book}
-            defaultExpanded
-            hideTrigger
-            onProgressSaved={async (newPage) => {
-              await updateBook(book.id, { current_page: newPage });
-              setProgressDialogOpen(false);
-            }}
-          />
-        </DialogContent>
-      </Dialog>
     </Card>
   );
 }
