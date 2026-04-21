@@ -15,6 +15,13 @@ import {
 } from "@/lib/readingHabits";
 import type { ReadingLog } from "@/types";
 
+const DAY_PART_HOUR_RANGES: Record<string, string> = {
+  Morning: "06:00-11:59",
+  Afternoon: "12:00-17:59",
+  Evening: "18:00-22:59",
+  Night: "23:00-05:59",
+};
+
 function getHeatmapRangeIso(): { startIso: string; endIso: string } {
   const now = new Date();
   const endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
@@ -176,13 +183,15 @@ export default function Analytics() {
                 <p className="text-xs text-muted-foreground">Usual reading time</p>
                 <p className="mt-1 text-lg font-semibold">
                   {habits.usualTime.dominantHourLabel
-                    ? `${habits.usualTime.dominantHourLabel} is your most common hour window`
+                    ? habits.usualTime.dominantHourLabel
                     : "No dominant reading hour yet"}
                 </p>
                 <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {habits.usualTime.dayParts.map((part) => (
                     <div key={part.label} className="rounded-md border bg-muted/20 px-3 py-2">
-                      <p className="text-xs text-muted-foreground">{part.label}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {part.label} ({DAY_PART_HOUR_RANGES[part.label]})
+                      </p>
                       <p className="text-base font-medium">{part.sessions}</p>
                       <p className="text-[11px] text-muted-foreground">{part.percentage.toFixed(0)}% of sessions</p>
                     </div>
