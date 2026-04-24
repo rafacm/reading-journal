@@ -118,6 +118,10 @@ export default function BookDetails() {
   } = useForm<FormValues>();
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [bookId]);
+
+  useEffect(() => {
     if (!book) return;
     setIsFavorite(book.is_favorite);
     setLocalRating(book.rating ?? null);
