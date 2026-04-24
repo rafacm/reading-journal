@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import ReadingHeatmap from "@/components/ReadingHeatmap";
 import GenreDistributionChart from "@/components/GenreDistributionChart";
+import WeekdayPatternsChart from "@/components/WeekdayPatternsChart";
 import { useBooksContext } from "@/context/BooksContext";
 import { fetchReadingLogs } from "@/lib/books";
 import {
@@ -206,48 +206,7 @@ export default function Analytics() {
 
               <div className="rounded-lg border p-4 sm:col-span-2">
                 <p className="text-xs text-muted-foreground">Weekday patterns (average per week)</p>
-                {habits.weekdays.highest && habits.weekdays.lowest ? (
-                  <div className="mt-3 rounded-md border">
-                      <div className="grid grid-cols-[minmax(0,1fr)_5.5rem_7.5rem] gap-2 border-b bg-muted/20 px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-                        <p>Weekday</p>
-                        <p className="text-right">Min/week</p>
-                        <p className="text-right">Sessions/week</p>
-                      </div>
-                      {habits.weekdays.all.map((day) => {
-                        const isMost = day.weekdayLabel === habits.weekdays.highest?.weekdayLabel;
-                        const isLeast = day.weekdayLabel === habits.weekdays.lowest?.weekdayLabel;
-                        return (
-                          <div
-                            key={day.weekdayLabel}
-                            className="grid grid-cols-[minmax(0,1fr)_5.5rem_7.5rem] items-center gap-2 border-b bg-background px-3 py-2 text-sm last:border-b-0"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{day.weekdayLabel}</span>
-                              {isMost && isLeast ? (
-                                <Badge variant="outline" className="text-[10px]">
-                                  Most & least
-                                </Badge>
-                              ) : isMost ? (
-                                <Badge variant="outline" className="text-[10px]">
-                                  Most active
-                                </Badge>
-                              ) : isLeast ? (
-                                <Badge variant="outline" className="text-[10px]">
-                                  Least active
-                                </Badge>
-                              ) : null}
-                            </div>
-                            <p className="text-right font-medium tabular-nums">{day.avgMinutesPerWeek.toFixed(1)}</p>
-                            <p className="text-right font-medium tabular-nums">{day.avgSessionsPerWeek.toFixed(1)}</p>
-                          </div>
-                        );
-                      })}
-                  </div>
-                ) : (
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Add more reading sessions to establish weekday trends.
-                  </p>
-                )}
+                <WeekdayPatternsChart weekdays={habits.weekdays} />
               </div>
             </div>
           )}
