@@ -474,7 +474,7 @@ export default function Login() {
       <div className="pointer-events-none relative z-20 flex min-h-svh items-center justify-center px-4 py-8 sm:px-8">
         <div className="pointer-events-auto w-full max-w-sm space-y-6 rounded-xl border border-white/30 bg-background/95 p-6 shadow-xl backdrop-blur-md sm:p-7">
           <div className="space-y-1">
-            <h1 className="text-2xl font-semibold tracking-tight">Reading Journal</h1>
+            <h1 className="text-2xl font-heading leading-snug font-medium tracking-tight">Reading Journal</h1>
             <p className="text-sm text-muted-foreground">Sign in to your account</p>
           </div>
           <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">

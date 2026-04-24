@@ -60,7 +60,7 @@ export default function Library() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Library</h1>
+        <h1 className="text-2xl font-heading leading-snug font-medium">Library</h1>
         <span className="text-sm text-muted-foreground">
           {loading ? "…" : `${books.length} book${books.length !== 1 ? "s" : ""}`}
         </span>
@@ -127,7 +127,7 @@ export default function Library() {
                 {seriesWithBooks.map((s) => (
                   <section key={s.id} className="space-y-3">
                     <div>
-                      <h3 className="font-medium">{s.name}</h3>
+                      <h3 className="font-heading leading-snug font-medium">{s.name}</h3>
                       <p className="text-xs text-muted-foreground">
                         {s.books.length} book{s.books.length !== 1 ? "s" : ""}
                       </p>
@@ -140,7 +140,7 @@ export default function Library() {
                 {standaloneBooks.length > 0 && (
                   <section className="space-y-3">
                     <div>
-                      <h3 className="font-medium text-muted-foreground">Standalone</h3>
+                      <h3 className="font-heading leading-snug font-medium text-muted-foreground">Standalone</h3>
                     </div>
                     <Separator />
                     <BooksGrid books={standaloneBooks} onBook={openBook} />

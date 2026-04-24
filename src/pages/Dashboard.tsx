@@ -32,7 +32,7 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="space-y-8">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
+        <h1 className="text-2xl font-heading leading-snug font-medium">Dashboard</h1>
         <SkeletonGrid />
       </div>
     );
@@ -41,7 +41,7 @@ export default function Dashboard() {
   if (error) {
     return (
       <div className="space-y-8">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
+        <h1 className="text-2xl font-heading leading-snug font-medium">Dashboard</h1>
         <div className="flex flex-col items-center gap-3 py-16 text-center">
           <p className="text-sm text-destructive">{error}</p>
           <Button variant="outline" size="sm" onClick={() => reload()}>
@@ -57,7 +57,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-semibold">Dashboard</h1>
+      <h1 className="text-2xl font-heading leading-snug font-medium">Dashboard</h1>
 
       {isEmpty ? (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
@@ -71,7 +71,7 @@ export default function Dashboard() {
         <>
           {currentlyReading.length > 0 && (
             <section className="space-y-3">
-              <h2 className="text-lg font-medium">Currently Reading</h2>
+              <h2 className="text-lg font-heading leading-snug font-medium">Currently Reading</h2>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
                 {currentlyReading.map((book) => (
                   <BookCard
@@ -87,7 +87,7 @@ export default function Dashboard() {
 
           {upNext.length > 0 && (
             <section className="space-y-3">
-              <h2 className="text-lg font-medium">Up Next</h2>
+              <h2 className="text-lg font-heading leading-snug font-medium">Up Next</h2>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
                 {upNext.map((book) => (
                   <BookCard key={book.id} book={book} onClick={openBook} />

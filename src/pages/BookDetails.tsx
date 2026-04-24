@@ -277,7 +277,7 @@ export default function BookDetails() {
     return (
       <div className="flex flex-col items-center gap-3 py-16 text-center">
         <BookOpen className="h-10 w-10 text-muted-foreground/40" />
-        <h1 className="text-lg font-semibold">Book not found</h1>
+        <h1 className="text-lg font-heading leading-snug font-medium">Book not found</h1>
         <p className="text-sm text-muted-foreground max-w-md">
           This book may not exist, may have been deleted, or you may not have access.
         </p>
@@ -341,7 +341,7 @@ export default function BookDetails() {
               </Badge>
             )}
 
-            <h1 className="text-3xl font-semibold leading-tight">{book.title}</h1>
+            <h1 className="text-3xl font-heading leading-snug font-medium">{book.title}</h1>
             <p className="text-base text-muted-foreground">{book.authors.join(", ")}</p>
 
             {book.isbn && (
@@ -394,7 +394,7 @@ export default function BookDetails() {
           </div>
 
           <section className="rounded-xl border bg-muted/30 p-4 space-y-3">
-            <h2 className="text-sm font-medium">Reading progress</h2>
+            <h2 className="text-sm font-heading leading-snug font-medium">Reading progress</h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <div className="rounded-md border bg-background/80 px-2 py-1.5">
                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Status</p>
