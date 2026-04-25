@@ -31,7 +31,6 @@ import {
   formatGenresInput,
   parseAuthorsInput,
   parseGenresInput,
-  statusVariant,
 } from "@/lib/utils";
 import ReadingProgressDialog from "@/components/ReadingProgressDialog";
 import BookAnalyticsPanel from "@/components/BookAnalyticsPanel";
@@ -339,14 +338,60 @@ export default function BookDetails() {
 
         <div className="space-y-4">
           <div className="space-y-2">
-            {seriesName && (
-              <Badge variant="outline" className="w-fit">
-                {seriesName}
-              </Badge>
-            )}
+            {isEditMode ? (
+              <>
+                <Controller
+                  name="series_id"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value || "__none__"}
+                      onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)}
+                    >
+                      <SelectTrigger className="h-7 rounded-full px-2.5 text-xs font-medium">
+                        <SelectValue placeholder="No series" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">No series</SelectItem>
+                        {series.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
 
-            <h1 className="text-3xl font-heading leading-snug font-medium">{book.title}</h1>
-            <p className="text-base text-muted-foreground">{book.authors.join(", ")}</p>
+                <Input
+                  aria-label="Title"
+                  className="font-heading"
+                  {...register("title", { required: true })}
+                />
+                <Input
+                  aria-label="Authors"
+                  className="text-muted-foreground"
+                  {...register("authorsInput", {
+                    validate: (value) =>
+                      parseAuthorsInput(value).length > 0 || "At least one author is required",
+                  })}
+                />
+                {errors.authorsInput && (
+                  <p className="text-xs text-destructive">{errors.authorsInput.message}</p>
+                )}
+              </>
+            ) : (
+              <>
+                {seriesName && (
+                  <Badge variant="outline" className="w-fit">
+                    {seriesName}
+                  </Badge>
+                )}
+
+                <h1 className="text-3xl font-heading leading-snug font-medium">{book.title}</h1>
+                <p className="text-base text-muted-foreground">{book.authors.join(", ")}</p>
+              </>
+            )}
 
             {book.isbn && (
               <a
@@ -361,7 +406,30 @@ export default function BookDetails() {
             )}
 
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={statusVariant(status)}>{status}</Badge>
+              {isEditMode ? (
+                <Controller
+                  name="status"
+                  control={control}
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger className="h-7 rounded-full px-2.5 text-xs font-medium">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STATUS_OPTIONS.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              ) : (
+                <Badge variant="outline" className="w-fit">
+                  {status}
+                </Badge>
+              )}
               <button
                 type="button"
                 onClick={toggleFavorite}
@@ -453,56 +521,6 @@ export default function BookDetails() {
             <div className="rounded-xl border p-4">
               <ScrollArea className="max-h-[62svh] pr-2">
                 <div className="grid gap-4 md:grid-cols-2 py-1">
-                  <div className="space-y-1.5 md:col-span-2">
-                    <Label htmlFor="detail-title">Title</Label>
-                    <Input
-                      id="detail-title"
-                      readOnly={!isEditMode}
-                      {...register("title", { required: true })}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5 md:col-span-2">
-                    <Label htmlFor="detail-authors">Authors</Label>
-                    <Input
-                      id="detail-authors"
-                      readOnly={!isEditMode}
-                      {...register("authorsInput", {
-                        validate: (value) =>
-                          parseAuthorsInput(value).length > 0 || "At least one author is required",
-                      })}
-                    />
-                    {errors.authorsInput && (
-                      <p className="text-xs text-destructive">{errors.authorsInput.message}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label>Status</Label>
-                    <Controller
-                      name="status"
-                      control={control}
-                      render={({ field }) => (
-                        <Select
-                          value={field.value}
-                          onValueChange={field.onChange}
-                          disabled={!isEditMode}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {STATUS_OPTIONS.map((option) => (
-                              <SelectItem key={option} value={option}>
-                                {option}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
-
                   <div className="space-y-1.5">
                     <Label htmlFor="detail-total_pages">Total pages</Label>
                     <Input
@@ -629,33 +647,6 @@ export default function BookDetails() {
                       />
                     </div>
                   )}
-
-                  <div className="space-y-1.5">
-                    <Label>Series</Label>
-                    <Controller
-                      name="series_id"
-                      control={control}
-                      render={({ field }) => (
-                        <Select
-                          value={field.value || "__none__"}
-                          onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)}
-                          disabled={!isEditMode}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="None" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">None</SelectItem>
-                            {series.map((item) => (
-                              <SelectItem key={item.id} value={item.id}>
-                                {item.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
 
                   {seriesId && (
                     <div className="space-y-1.5">
