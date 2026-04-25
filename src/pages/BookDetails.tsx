@@ -459,66 +459,70 @@ export default function BookDetails() {
             <div className="rounded-xl border p-4">
               <ScrollArea className="max-h-[62svh] pr-2">
                 <div className="grid gap-4 md:grid-cols-2 py-1">
-                  <div className="space-y-1.5 md:col-span-2">
-                    <Label htmlFor="detail-title">Title</Label>
-                    <Input
-                      id="detail-title"
-                      readOnly={!isEditMode}
-                      {...register("title", { required: true })}
-                    />
-                  </div>
+                  {isEditMode && (
+                    <div className="space-y-1.5 md:col-span-2">
+                      <Label htmlFor="detail-title">Title</Label>
+                      <Input id="detail-title" readOnly={!isEditMode} {...register("title", { required: true })} />
+                    </div>
+                  )}
 
-                  <div className="space-y-1.5 md:col-span-2">
-                    <Label htmlFor="detail-authors">Authors</Label>
-                    <Input
-                      id="detail-authors"
-                      readOnly={!isEditMode}
-                      {...register("authorsInput", {
-                        validate: (value) =>
-                          parseAuthorsInput(value).length > 0 || "At least one author is required",
-                      })}
-                    />
-                    {errors.authorsInput && (
-                      <p className="text-xs text-destructive">{errors.authorsInput.message}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label>Status</Label>
-                    <Controller
-                      name="status"
-                      control={control}
-                      render={({ field }) => (
-                        <Select
-                          value={field.value}
-                          onValueChange={field.onChange}
-                          disabled={!isEditMode}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {STATUS_OPTIONS.map((option) => (
-                              <SelectItem key={option} value={option}>
-                                {option}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                  {isEditMode && (
+                    <div className="space-y-1.5 md:col-span-2">
+                      <Label htmlFor="detail-authors">Authors</Label>
+                      <Input
+                        id="detail-authors"
+                        readOnly={!isEditMode}
+                        {...register("authorsInput", {
+                          validate: (value) =>
+                            parseAuthorsInput(value).length > 0 || "At least one author is required",
+                        })}
+                      />
+                      {errors.authorsInput && (
+                        <p className="text-xs text-destructive">{errors.authorsInput.message}</p>
                       )}
-                    />
-                  </div>
+                    </div>
+                  )}
 
-                  <div className="space-y-1.5">
-                    <Label htmlFor="detail-total_pages">Total pages</Label>
-                    <Input
-                      id="detail-total_pages"
-                      type="number"
-                      min={1}
-                      readOnly={!isEditMode}
-                      {...register("total_pages")}
-                    />
-                  </div>
+                  {isEditMode && (
+                    <div className="space-y-1.5">
+                      <Label>Status</Label>
+                      <Controller
+                        name="status"
+                        control={control}
+                        render={({ field }) => (
+                          <Select
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            disabled={!isEditMode}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {STATUS_OPTIONS.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {option}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                    </div>
+                  )}
+
+                  {isEditMode && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="detail-total_pages">Total pages</Label>
+                      <Input
+                        id="detail-total_pages"
+                        type="number"
+                        min={1}
+                        readOnly={!isEditMode}
+                        {...register("total_pages")}
+                      />
+                    </div>
+                  )}
 
                   <div className="space-y-1.5 md:col-span-2">
                     <Label htmlFor="detail-genresInput">Genres</Label>
@@ -636,34 +640,36 @@ export default function BookDetails() {
                     </div>
                   )}
 
-                  <div className="space-y-1.5">
-                    <Label>Series</Label>
-                    <Controller
-                      name="series_id"
-                      control={control}
-                      render={({ field }) => (
-                        <Select
-                          value={field.value || "__none__"}
-                          onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)}
-                          disabled={!isEditMode}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="None" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">None</SelectItem>
-                            {series.map((item) => (
-                              <SelectItem key={item.id} value={item.id}>
-                                {item.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
+                  {isEditMode && (
+                    <div className="space-y-1.5">
+                      <Label>Series</Label>
+                      <Controller
+                        name="series_id"
+                        control={control}
+                        render={({ field }) => (
+                          <Select
+                            value={field.value || "__none__"}
+                            onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)}
+                            disabled={!isEditMode}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="None" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">None</SelectItem>
+                              {series.map((item) => (
+                                <SelectItem key={item.id} value={item.id}>
+                                  {item.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                    </div>
+                  )}
 
-                  {seriesId && (
+                  {isEditMode && seriesId && (
                     <div className="space-y-1.5">
                       <Label htmlFor="detail-volume_number">Volume number</Label>
                       <Input
