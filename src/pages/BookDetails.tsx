@@ -34,7 +34,7 @@ import {
 } from "@/lib/utils";
 import ReadingProgressDialog from "@/components/ReadingProgressDialog";
 import BookAnalyticsPanel from "@/components/BookAnalyticsPanel";
-import GenreTags from "@/components/GenreTags";
+import PropertyBox from "@/components/PropertyBox";
 import type {
   Book,
   BookStatus,
@@ -86,6 +86,13 @@ function bookToFormValues(book: Book): FormValues {
   };
 }
 
+function formatDateForDisplay(value: string): string {
+  if (!value) return "Not set";
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  return `${day}.${month}.${year}`;
+}
+
 export default function BookDetails() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
@@ -133,6 +140,12 @@ export default function BookDetails() {
   const status = watch("status") ?? book?.status ?? "Not Started";
   const seriesId = watch("series_id");
   const genresInput = watch("genresInput") ?? "";
+  const languageValue = watch("language") ?? "";
+  const formatValue = watch("format") ?? "";
+  const belongsToValue = watch("belongs_to") ?? "";
+  const dateStartedValue = watch("date_started") ?? "";
+  const dateFinishedValue = watch("date_finished") ?? "";
+  const isbnValue = watch("isbn") ?? "";
   const parsedGenres = parseGenresInput(genresInput);
   const showDateStarted = ["Reading", "Finished", "DNF"].includes(status);
   const showDateFinished = ["Finished", "DNF"].includes(status);
@@ -406,22 +419,18 @@ export default function BookDetails() {
           <section className="rounded-xl border bg-muted/30 p-4 space-y-3">
             <h2 className="text-sm font-heading leading-snug font-medium">Reading progress</h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="rounded-md border bg-background/80 px-2 py-1.5">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Status</p>
+              <PropertyBox title="Status">
                 <p className="text-sm font-medium">{status}</p>
-              </div>
-              <div className="rounded-md border bg-background/80 px-2 py-1.5">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Current page</p>
+              </PropertyBox>
+              <PropertyBox title="Current page">
                 <p className="text-sm font-medium">{currentPage}</p>
-              </div>
-              <div className="rounded-md border bg-background/80 px-2 py-1.5">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Total pages</p>
+              </PropertyBox>
+              <PropertyBox title="Total pages">
                 <p className="text-sm font-medium">{totalPages || "-"}</p>
-              </div>
-              <div className="rounded-md border bg-background/80 px-2 py-1.5">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Progress</p>
+              </PropertyBox>
+              <PropertyBox title="Progress">
                 <p className="text-sm font-medium">{progressPercent}%</p>
-              </div>
+              </PropertyBox>
             </div>
             <Progress value={progressPercent} className="h-1.5" />
             {status === "Reading" && (
@@ -524,120 +533,144 @@ export default function BookDetails() {
                     </div>
                   )}
 
-                  <div className="space-y-1.5 md:col-span-2">
-                    <Label htmlFor="detail-genresInput">Genres</Label>
-                    {isEditMode ? (
+                  {isEditMode ? (
+                    <div className="space-y-1.5 md:col-span-2">
+                      <Label htmlFor="detail-genresInput">Genres</Label>
                       <Input id="detail-genresInput" {...register("genresInput")} />
-                    ) : (
-                      <div className="min-h-9 rounded-md px-0.5 py-1">
-                        <GenreTags genres={parsedGenres} />
+                    </div>
+                  ) : (
+                    <PropertyBox title="Genres" className="md:col-span-2">
+                      <p className="text-sm font-medium">{parsedGenres.length > 0 ? parsedGenres.join(", ") : "Not set"}</p>
+                    </PropertyBox>
+                  )}
+
+                  <div className="grid gap-4 md:col-span-2 md:grid-cols-3">
+                    {isEditMode ? (
+                      <div className="space-y-1.5">
+                        <Label>Language</Label>
+                        <Controller
+                          name="language"
+                          control={control}
+                          render={({ field }) => (
+                            <Select
+                              value={field.value || "__none__"}
+                              onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Not set" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">Not set</SelectItem>
+                                {(["German", "Spanish", "English"] as BookLanguage[]).map((language) => (
+                                  <SelectItem key={language} value={language}>
+                                    {language}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
                       </div>
+                    ) : (
+                      <PropertyBox title="Language">
+                        <p className="text-sm font-medium">{languageValue || "Not set"}</p>
+                      </PropertyBox>
+                    )}
+
+                    {isEditMode ? (
+                      <div className="space-y-1.5">
+                        <Label>Format</Label>
+                        <Controller
+                          name="format"
+                          control={control}
+                          render={({ field }) => (
+                            <Select
+                              value={field.value || "__none__"}
+                              onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Not set" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">Not set</SelectItem>
+                                {(["eBook", "Audiobook", "Paperback", "Hardcover"] as BookFormat[]).map((format) => (
+                                  <SelectItem key={format} value={format}>
+                                    {format}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                      </div>
+                    ) : (
+                      <PropertyBox title="Format">
+                        <p className="text-sm font-medium">{formatValue || "Not set"}</p>
+                      </PropertyBox>
+                    )}
+
+                    {isEditMode ? (
+                      <div className="space-y-1.5">
+                        <Label>Belongs to</Label>
+                        <Controller
+                          name="belongs_to"
+                          control={control}
+                          render={({ field }) => (
+                            <Select
+                              value={field.value || "__none__"}
+                              onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Not set" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">Not set</SelectItem>
+                                {(["Me", "Family", "Friends", "Library"] as BookBelongsTo[]).map((belongsTo) => (
+                                  <SelectItem key={belongsTo} value={belongsTo}>
+                                    {belongsTo}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                      </div>
+                    ) : (
+                      <PropertyBox title="Belongs to">
+                        <p className="text-sm font-medium">{belongsToValue || "Not set"}</p>
+                      </PropertyBox>
                     )}
                   </div>
 
-                  <div className="space-y-1.5">
-                    <Label>Language</Label>
-                    <Controller
-                      name="language"
-                      control={control}
-                      render={({ field }) => (
-                        <Select
-                          value={field.value || "__none__"}
-                          onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)}
-                          disabled={!isEditMode}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Not set" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">Not set</SelectItem>
-                            {(["German", "Spanish", "English"] as BookLanguage[]).map((language) => (
-                              <SelectItem key={language} value={language}>
-                                {language}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label>Format</Label>
-                    <Controller
-                      name="format"
-                      control={control}
-                      render={({ field }) => (
-                        <Select
-                          value={field.value || "__none__"}
-                          onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)}
-                          disabled={!isEditMode}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Not set" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">Not set</SelectItem>
-                            {(["eBook", "Audiobook", "Paperback", "Hardcover"] as BookFormat[]).map((format) => (
-                              <SelectItem key={format} value={format}>
-                                {format}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label>Belongs to</Label>
-                    <Controller
-                      name="belongs_to"
-                      control={control}
-                      render={({ field }) => (
-                        <Select
-                          value={field.value || "__none__"}
-                          onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)}
-                          disabled={!isEditMode}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Not set" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">Not set</SelectItem>
-                            {(["Me", "Family", "Friends", "Library"] as BookBelongsTo[]).map((belongsTo) => (
-                              <SelectItem key={belongsTo} value={belongsTo}>
-                                {belongsTo}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
-
                   {showDateStarted && (
-                    <div className="space-y-1.5">
-                      <Label htmlFor="detail-date_started">Date started</Label>
-                      <Input
-                        id="detail-date_started"
-                        type="date"
-                        readOnly={!isEditMode}
-                        {...register("date_started")}
-                      />
-                    </div>
+                    isEditMode ? (
+                      <div className="space-y-1.5">
+                          <Label htmlFor="detail-date_started">Date started</Label>
+                          <Input id="detail-date_started" type="date" readOnly={!isEditMode} {...register("date_started")} />
+                      </div>
+                    ) : (
+                      <PropertyBox title="Date started">
+                        <p className="text-sm font-medium">{formatDateForDisplay(dateStartedValue)}</p>
+                      </PropertyBox>
+                    )
                   )}
 
                   {showDateFinished && (
-                    <div className="space-y-1.5">
-                      <Label htmlFor="detail-date_finished">Date finished</Label>
-                      <Input
-                        id="detail-date_finished"
-                        type="date"
-                        readOnly={!isEditMode}
-                        {...register("date_finished")}
-                      />
-                    </div>
+                    isEditMode ? (
+                      <div className="space-y-1.5">
+                          <Label htmlFor="detail-date_finished">Date finished</Label>
+                          <Input
+                            id="detail-date_finished"
+                            type="date"
+                            readOnly={!isEditMode}
+                            {...register("date_finished")}
+                          />
+                      </div>
+                    ) : (
+                      <PropertyBox title="Date finished">
+                        <p className="text-sm font-medium">{formatDateForDisplay(dateFinishedValue)}</p>
+                      </PropertyBox>
+                    )
                   )}
 
                   {isEditMode && (
@@ -683,17 +716,23 @@ export default function BookDetails() {
                     </div>
                   )}
 
-                  <div className="space-y-1.5 md:col-span-2">
-                    <Label htmlFor="detail-isbn">ISBN</Label>
-                    <Input
-                      id="detail-isbn"
-                      inputMode="numeric"
-                      autoComplete="off"
-                      placeholder="978..."
-                      readOnly={!isEditMode}
-                      {...register("isbn")}
-                    />
-                  </div>
+                  {isEditMode ? (
+                    <div className="space-y-1.5 md:col-span-2">
+                        <Label htmlFor="detail-isbn">ISBN</Label>
+                        <Input
+                          id="detail-isbn"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          placeholder="978..."
+                          readOnly={!isEditMode}
+                          {...register("isbn")}
+                        />
+                    </div>
+                  ) : (
+                    <PropertyBox title="ISBN" className="md:col-span-2">
+                      <p className="text-sm font-medium">{isbnValue || "Not set"}</p>
+                    </PropertyBox>
+                  )}
                 </div>
               </ScrollArea>
 
