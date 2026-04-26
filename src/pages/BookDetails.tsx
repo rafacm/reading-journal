@@ -93,6 +93,12 @@ function formatDateForDisplay(value: string): string {
   return `${day}.${month}.${year}`;
 }
 
+function getTodayLocalDate(): string {
+  const now = new Date();
+  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 10);
+}
+
 export default function BookDetails() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
@@ -443,7 +449,10 @@ export default function BookDetails() {
                 onClick={async () => {
                   try {
                     setErrorMsg(null);
-                    await updateBook(book.id, { status: "Reading" });
+                    await updateBook(book.id, {
+                      status: "Reading",
+                      ...(book.date_started ? {} : { date_started: getTodayLocalDate() }),
+                    });
                     setIsProgressDialogOpen(true);
                   } catch (err) {
                     setErrorMsg(err instanceof Error ? err.message : "Failed to start reading");
@@ -466,7 +475,12 @@ export default function BookDetails() {
 
                   await updateBook(book.id, {
                     current_page: newPage,
-                    ...(shouldFinish ? { status: "Finished" } : {}),
+                    ...(shouldFinish
+                      ? {
+                          status: "Finished",
+                          ...(book.date_finished ? {} : { date_finished: getTodayLocalDate() }),
+                        }
+                      : {}),
                   });
                 }}
                 trigger={
