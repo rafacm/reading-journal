@@ -27,6 +27,14 @@ export type ProfilePayload = Partial<
 export type GroupPayload = Pick<Group, "name"> &
   Partial<Pick<Group, "description" | "avatar_url">>;
 
+export function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "message" in error) {
+    return String((error as { message: unknown }).message);
+  }
+  return fallback;
+}
+
 function normalizeProfile(row: NullableProfileRow): Profile {
   return {
     id: row.id,
@@ -122,27 +130,22 @@ export async function createGroup(payload: GroupPayload): Promise<{
   group: Group;
   ownerMembership: GroupMembership;
 }> {
-  await ensureMyProfile();
-  const userId = await getCurrentUserId();
-
   const { data: groupData, error: groupError } = await supabase
-    .from("groups")
-    .insert({ ...payload, created_by: userId })
-    .select()
+    .rpc("create_group_with_owner", {
+      group_name: payload.name,
+      group_description: payload.description ?? null,
+      group_avatar_url: payload.avatar_url ?? null,
+    })
     .single();
 
   if (groupError) throw groupError;
-  const group = normalizeGroup(groupData as NullableGroupRow);
 
+  const group = normalizeGroup(groupData as NullableGroupRow);
   const { data: membershipData, error: membershipError } = await supabase
     .from("group_memberships")
-    .insert({
-      group_id: group.id,
-      user_id: userId,
-      role: "owner",
-      status: "active",
-    })
-    .select()
+    .select("*")
+    .eq("group_id", group.id)
+    .eq("user_id", group.created_by)
     .single();
 
   if (membershipError) throw membershipError;
