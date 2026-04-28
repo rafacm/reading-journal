@@ -70,15 +70,6 @@ async function getCurrentUserId(): Promise<string> {
   return user.id;
 }
 
-async function ensureMyProfile(): Promise<void> {
-  const userId = await getCurrentUserId();
-  const { error } = await supabase
-    .from("profiles")
-    .upsert({ id: userId }, { onConflict: "id" });
-
-  if (error) throw error;
-}
-
 export async function getMyProfile(): Promise<Profile | null> {
   const userId = await getCurrentUserId();
   const { data, error } = await supabase
