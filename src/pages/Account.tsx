@@ -21,6 +21,7 @@ import {
   getGroupMembers,
   getMyGroups,
   getMyProfile,
+  getErrorMessage,
   removeGroupMember,
   updateGroupMemberRole,
   updateMyProfile,
@@ -89,7 +90,7 @@ export default function Account() {
         nextGroups.some((group) => group.id === current) ? current : nextGroups[0]?.id || "",
       );
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Could not load account data.");
+      setError(getErrorMessage(loadError, "Could not load account data."));
     } finally {
       setLoading(false);
     }
@@ -112,7 +113,7 @@ export default function Account() {
       })
       .catch((memberError) => {
         if (!cancelled) {
-          setError(memberError instanceof Error ? memberError.message : "Could not load group members.");
+          setError(getErrorMessage(memberError, "Could not load group members."));
         }
       });
 
@@ -136,7 +137,7 @@ export default function Account() {
       setProfileForm(profileToForm(savedProfile));
       setMessage("Profile saved.");
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Could not save profile.");
+      setError(getErrorMessage(saveError, "Could not save profile."));
     } finally {
       setSavingProfile(false);
     }
@@ -162,7 +163,7 @@ export default function Account() {
       setGroupForm({ name: "", description: "" });
       setMessage("Group created.");
     } catch (groupError) {
-      setError(groupError instanceof Error ? groupError.message : "Could not create group.");
+      setError(getErrorMessage(groupError, "Could not create group."));
     } finally {
       setCreatingGroup(false);
     }
@@ -182,7 +183,7 @@ export default function Account() {
       setMemberUserId("");
       setMessage("Member added.");
     } catch (memberError) {
-      setError(memberError instanceof Error ? memberError.message : "Could not add member.");
+      setError(getErrorMessage(memberError, "Could not add member."));
     }
   }
 
@@ -198,7 +199,7 @@ export default function Account() {
       );
       setMessage("Member role updated.");
     } catch (roleError) {
-      setError(roleError instanceof Error ? roleError.message : "Could not update member role.");
+      setError(getErrorMessage(roleError, "Could not update member role."));
     }
   }
 
@@ -217,7 +218,7 @@ export default function Account() {
         setSelectedGroupId(nextGroups[0]?.id || "");
       }
     } catch (removeError) {
-      setError(removeError instanceof Error ? removeError.message : "Could not remove member.");
+      setError(getErrorMessage(removeError, "Could not remove member."));
     }
   }
 
