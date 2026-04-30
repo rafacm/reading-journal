@@ -205,7 +205,7 @@ export default function Analytics() {
               </div>
 
               <div className="rounded-lg border p-4 sm:col-span-2">
-                <p className="text-xs text-muted-foreground">Weekday patterns (average per week)</p>
+                <p className="text-xs text-muted-foreground">Weekday patterns (median per week)</p>
                 <WeekdayPatternsChart weekdays={habits.weekdays} />
               </div>
             </div>

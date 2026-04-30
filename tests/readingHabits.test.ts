@@ -113,3 +113,30 @@ test("normalizes weekday metrics per week and uses sessions as tie-breaker", () 
   assert.equal(metrics.weekdays.lowest?.weekdayLabel, "Thursday");
   assert.equal(metrics.weekdays.weekSpan.toFixed(2), "3.86");
 });
+
+test("computes weekday medians from individual week buckets", () => {
+  const logs: ReadingLog[] = [
+    makeLog("m1", "book-a", "2026-01-05T09:00:00", 10, 20),
+    makeLog("m2", "book-a", "2026-01-12T09:00:00", 20, 60),
+    makeLog("m3", "book-a", "2026-01-19T09:00:00", 30, 100),
+    makeLog("t1", "book-a", "2026-01-06T09:00:00", 40, 300),
+  ];
+
+  const metrics = calculateReadingHabits(logs, "2026-01-01T00:00:00", "2026-01-25T23:59:59");
+  const monday = metrics.weekdays.all.find((weekday) => weekday.weekdayLabel === "Monday");
+  const tuesday = metrics.weekdays.all.find((weekday) => weekday.weekdayLabel === "Tuesday");
+
+  assert.equal(monday?.medianMinutesPerWeek, 60);
+  assert.deepEqual(
+    monday?.weeklyValues.map((week) => week.minutes),
+    [20, 60, 100]
+  );
+
+  assert.equal(tuesday?.avgMinutesPerWeek.toFixed(1), "100.0");
+  assert.equal(tuesday?.medianMinutesPerWeek, 0);
+  assert.deepEqual(
+    tuesday?.weeklyValues.map((week) => week.minutes),
+    [300, 0, 0]
+  );
+  assert.equal(metrics.weekdays.highest?.weekdayLabel, "Monday");
+});
