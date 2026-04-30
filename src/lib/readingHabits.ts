@@ -41,8 +41,15 @@ export interface WeekdayStats {
   weekdayLabel: (typeof WEEKDAY_LABELS)[number];
   avgMinutesPerWeek: number;
   avgSessionsPerWeek: number;
+  medianMinutesPerWeek: number;
+  medianSessionsPerWeek: number;
   totalMinutes: number;
   totalSessions: number;
+  weeklyValues: {
+    weekStartIso: string;
+    minutes: number;
+    sessions: number;
+  }[];
 }
 
 export interface ReadingHabitsMetrics {
@@ -83,6 +90,12 @@ function startOfLocalDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+function startOfLocalWeek(date: Date): Date {
+  const start = startOfLocalDay(date);
+  start.setDate(start.getDate() - toMondayFirstWeekdayIndex(start.getDay()));
+  return start;
+}
+
 function getWeekSpan(startIso: string, endIso: string): number {
   const start = startOfLocalDay(new Date(startIso));
   const end = startOfLocalDay(new Date(endIso));
@@ -98,6 +111,44 @@ function getEffectiveWeekSpan(logs: ReadingLog[], startIso: string, endIso: stri
   const firstLogStart = startOfLocalDay(new Date(logs[0].logged_at));
   const effectiveStart = firstLogStart > rangeStart ? firstLogStart : rangeStart;
   return getWeekSpan(effectiveStart.toISOString(), endIso);
+}
+
+function getEffectiveStartDate(logs: ReadingLog[], startIso: string): Date {
+  if (logs.length === 0) return startOfLocalDay(new Date(startIso));
+
+  const rangeStart = startOfLocalDay(new Date(startIso));
+  const firstLogStart = startOfLocalDay(new Date(logs[0].logged_at));
+  return firstLogStart > rangeStart ? firstLogStart : rangeStart;
+}
+
+function getWeekStarts(start: Date, end: Date): Date[] {
+  const weekStarts: Date[] = [];
+  const cursor = startOfLocalWeek(start);
+  const finalWeekStart = startOfLocalWeek(end);
+
+  while (cursor <= finalWeekStart) {
+    weekStarts.push(new Date(cursor));
+    cursor.setDate(cursor.getDate() + 7);
+  }
+
+  return weekStarts;
+}
+
+function getWeekKey(date: Date): string {
+  return startOfLocalWeek(date).toISOString();
+}
+
+function getMedian(values: number[]): number {
+  if (values.length === 0) return 0;
+
+  const sortedValues = [...values].sort((left, right) => left - right);
+  const middleIndex = Math.floor(sortedValues.length / 2);
+
+  if (sortedValues.length % 2 === 1) {
+    return sortedValues[middleIndex];
+  }
+
+  return (sortedValues[middleIndex - 1] + sortedValues[middleIndex]) / 2;
 }
 
 function allocateMinutesByHour(
@@ -159,8 +210,11 @@ export function calculateReadingHabits(
           weekdayLabel,
           avgMinutesPerWeek: 0,
           avgSessionsPerWeek: 0,
+          medianMinutesPerWeek: 0,
+          medianSessionsPerWeek: 0,
           totalMinutes: 0,
           totalSessions: 0,
+          weeklyValues: [],
         })),
       },
     };
@@ -177,13 +231,21 @@ export function calculateReadingHabits(
 
   const weekdayMinutesTotal = new Array<number>(7).fill(0);
   const weekdaySessionsTotal = new Array<number>(7).fill(0);
+  const weekdayWeeklyMinutes = Array.from({ length: 7 }, () => new Map<string, number>());
+  const weekdayWeeklySessions = Array.from({ length: 7 }, () => new Map<string, number>());
 
   const logsByBook = new Map<string, ReadingLog[]>();
 
   for (const log of sortedLogs) {
     const loggedAt = new Date(log.logged_at);
     const weekdayIndex = toMondayFirstWeekdayIndex(loggedAt.getDay());
+    const loggedAtWeekKey = getWeekKey(loggedAt);
+
     weekdaySessionsTotal[weekdayIndex] += 1;
+    weekdayWeeklySessions[weekdayIndex].set(
+      loggedAtWeekKey,
+      (weekdayWeeklySessions[weekdayIndex].get(loggedAtWeekKey) ?? 0) + 1
+    );
 
     const readingMinutes = log.reading_time_minutes ?? 0;
     if (readingMinutes > 0) {
@@ -194,10 +256,15 @@ export function calculateReadingHabits(
         const chunkHour = chunkStart.getHours();
         const chunkDayPart = getDayPartLabel(chunkHour);
         const chunkWeekdayIndex = toMondayFirstWeekdayIndex(chunkStart.getDay());
+        const chunkWeekKey = getWeekKey(chunkStart);
 
         dayPartMinutes.set(chunkDayPart, (dayPartMinutes.get(chunkDayPart) ?? 0) + chunkMinutes);
         hourMinutes[chunkHour] += chunkMinutes;
         weekdayMinutesTotal[chunkWeekdayIndex] += chunkMinutes;
+        weekdayWeeklyMinutes[chunkWeekdayIndex].set(
+          chunkWeekKey,
+          (weekdayWeeklyMinutes[chunkWeekdayIndex].get(chunkWeekKey) ?? 0) + chunkMinutes
+        );
       });
     }
 
@@ -251,23 +318,43 @@ export function calculateReadingHabits(
     maxHourCount > 0 ? hourMinutes.findIndex((count) => count === maxHourCount) : null;
 
   const weekSpan = getEffectiveWeekSpan(sortedLogs, startIso, endIso);
-  const weekdayStats: WeekdayStats[] = WEEKDAY_LABELS.map((weekdayLabel, index) => ({
-    weekdayLabel,
-    avgMinutesPerWeek: weekdayMinutesTotal[index] / weekSpan,
-    avgSessionsPerWeek: weekdaySessionsTotal[index] / weekSpan,
-    totalMinutes: weekdayMinutesTotal[index],
-    totalSessions: weekdaySessionsTotal[index],
-  }));
+  const effectiveStartDate = getEffectiveStartDate(sortedLogs, startIso);
+  const weekStarts = getWeekStarts(effectiveStartDate, startOfLocalDay(new Date(endIso)));
+  const weekKeys = weekStarts.map((weekStart) => weekStart.toISOString());
+  const weekdayStats: WeekdayStats[] = WEEKDAY_LABELS.map((weekdayLabel, index) => {
+    const weeklyValues = weekKeys.map((weekStartIso) => ({
+      weekStartIso,
+      minutes: weekdayWeeklyMinutes[index].get(weekStartIso) ?? 0,
+      sessions: weekdayWeeklySessions[index].get(weekStartIso) ?? 0,
+    }));
+
+    return {
+      weekdayLabel,
+      avgMinutesPerWeek: weekdayMinutesTotal[index] / weekSpan,
+      avgSessionsPerWeek: weekdaySessionsTotal[index] / weekSpan,
+      medianMinutesPerWeek: getMedian(weeklyValues.map((week) => week.minutes)),
+      medianSessionsPerWeek: getMedian(weeklyValues.map((week) => week.sessions)),
+      totalMinutes: weekdayMinutesTotal[index],
+      totalSessions: weekdaySessionsTotal[index],
+      weeklyValues,
+    };
+  });
 
   const hasWeekdayActivity = weekdayStats.some((weekday) => weekday.totalSessions > 0);
 
   const highest = hasWeekdayActivity
     ? [...weekdayStats].sort((left, right) => {
-        if (right.avgMinutesPerWeek !== left.avgMinutesPerWeek) {
-          return right.avgMinutesPerWeek - left.avgMinutesPerWeek;
+        if (right.medianMinutesPerWeek !== left.medianMinutesPerWeek) {
+          return right.medianMinutesPerWeek - left.medianMinutesPerWeek;
         }
-        if (right.avgSessionsPerWeek !== left.avgSessionsPerWeek) {
-          return right.avgSessionsPerWeek - left.avgSessionsPerWeek;
+        if (right.medianSessionsPerWeek !== left.medianSessionsPerWeek) {
+          return right.medianSessionsPerWeek - left.medianSessionsPerWeek;
+        }
+        if (right.totalMinutes !== left.totalMinutes) {
+          return right.totalMinutes - left.totalMinutes;
+        }
+        if (right.totalSessions !== left.totalSessions) {
+          return right.totalSessions - left.totalSessions;
         }
         return WEEKDAY_LABELS.indexOf(left.weekdayLabel) - WEEKDAY_LABELS.indexOf(right.weekdayLabel);
       })[0]
@@ -275,11 +362,17 @@ export function calculateReadingHabits(
 
   const lowest = hasWeekdayActivity
     ? [...weekdayStats].sort((left, right) => {
-        if (left.avgMinutesPerWeek !== right.avgMinutesPerWeek) {
-          return left.avgMinutesPerWeek - right.avgMinutesPerWeek;
+        if (left.medianMinutesPerWeek !== right.medianMinutesPerWeek) {
+          return left.medianMinutesPerWeek - right.medianMinutesPerWeek;
         }
-        if (left.avgSessionsPerWeek !== right.avgSessionsPerWeek) {
-          return left.avgSessionsPerWeek - right.avgSessionsPerWeek;
+        if (left.medianSessionsPerWeek !== right.medianSessionsPerWeek) {
+          return left.medianSessionsPerWeek - right.medianSessionsPerWeek;
+        }
+        if (left.totalMinutes !== right.totalMinutes) {
+          return left.totalMinutes - right.totalMinutes;
+        }
+        if (left.totalSessions !== right.totalSessions) {
+          return left.totalSessions - right.totalSessions;
         }
         return WEEKDAY_LABELS.indexOf(left.weekdayLabel) - WEEKDAY_LABELS.indexOf(right.weekdayLabel);
       })[0]
