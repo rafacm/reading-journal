@@ -314,7 +314,7 @@ function LibraryShelfList({
               to={viewPath(shelf.value)}
               className={cn(
                 "flex items-center rounded-lg transition-colors",
-                mobile ? "px-3 py-2 text-sm" : "px-3 py-2 text-sm",
+                mobile ? "gap-2 px-3 py-2 text-sm" : "px-3 py-2 text-sm",
                 active
                   ? "bg-muted font-medium text-foreground"
                   : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
