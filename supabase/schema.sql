@@ -51,6 +51,18 @@ CREATE TABLE IF NOT EXISTS reading_logs (
   logged_at            timestamptz NOT NULL DEFAULT now()
 );
 
+-- ── BOOK NOTES ────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS book_notes (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  book_id    uuid NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  label      text NOT NULL CHECK (label IN ('quote','review','note')),
+  title      text,
+  content    text NOT NULL CHECK (length(btrim(content)) > 0),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 -- ── PROFILES ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS profiles (
   id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -119,6 +131,9 @@ CREATE INDEX IF NOT EXISTS books_status_idx         ON books(user_id, status);
 CREATE INDEX IF NOT EXISTS series_user_id_idx       ON series(user_id);
 CREATE INDEX IF NOT EXISTS reading_logs_user_id_idx ON reading_logs(user_id);
 CREATE INDEX IF NOT EXISTS reading_logs_book_id_idx ON reading_logs(book_id);
+CREATE INDEX IF NOT EXISTS book_notes_user_id_idx ON book_notes(user_id);
+CREATE INDEX IF NOT EXISTS book_notes_book_id_idx ON book_notes(book_id);
+CREATE INDEX IF NOT EXISTS book_notes_book_created_at_idx ON book_notes(book_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS profiles_created_at_idx ON profiles(created_at);
 CREATE INDEX IF NOT EXISTS groups_created_by_idx ON groups(created_by);
 CREATE INDEX IF NOT EXISTS group_memberships_user_id_idx ON group_memberships(user_id);
@@ -128,6 +143,7 @@ CREATE INDEX IF NOT EXISTS group_memberships_group_id_idx ON group_memberships(g
 ALTER TABLE series       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE books        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reading_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE book_notes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE group_memberships ENABLE ROW LEVEL SECURITY;
@@ -261,6 +277,40 @@ CREATE POLICY "reading_logs: owner select" ON reading_logs FOR SELECT USING (aut
 CREATE POLICY "reading_logs: owner insert" ON reading_logs FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "reading_logs: owner update" ON reading_logs FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "reading_logs: owner delete" ON reading_logs FOR DELETE USING (auth.uid() = user_id);
+
+-- book_notes
+CREATE POLICY "book_notes: owner select"
+  ON book_notes FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "book_notes: owner insert"
+  ON book_notes FOR INSERT
+  WITH CHECK (
+    auth.uid() = user_id
+    AND EXISTS (
+      SELECT 1
+      FROM books
+      WHERE books.id = book_notes.book_id
+        AND books.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "book_notes: owner update"
+  ON book_notes FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (
+    auth.uid() = user_id
+    AND EXISTS (
+      SELECT 1
+      FROM books
+      WHERE books.id = book_notes.book_id
+        AND books.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "book_notes: owner delete"
+  ON book_notes FOR DELETE
+  USING (auth.uid() = user_id);
 
 -- profiles
 CREATE POLICY "profiles: owner select" ON profiles FOR SELECT USING (auth.uid() = id);

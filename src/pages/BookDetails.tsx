@@ -34,6 +34,7 @@ import { getAllowedGenres } from "@/lib/bookGenres";
 import GenreMultiSelect from "@/components/GenreMultiSelect";
 import ReadingProgressDialog from "@/components/ReadingProgressDialog";
 import BookAnalyticsPanel from "@/components/BookAnalyticsPanel";
+import BookNotesPanel from "@/components/BookNotesPanel";
 import PropertyBox from "@/components/PropertyBox";
 import type {
   Book,
@@ -513,8 +514,8 @@ export default function BookDetails() {
           <TabsTrigger value="properties" className="flex-1">
             Properties
           </TabsTrigger>
-          <TabsTrigger value="journal" className="flex-1">
-            Journal
+          <TabsTrigger value="notes" className="flex-1">
+            Notes
           </TabsTrigger>
           <TabsTrigger value="analytics" className="flex-1">
             Analytics
@@ -852,10 +853,8 @@ export default function BookDetails() {
           </form>
         </TabsContent>
 
-        <TabsContent value="journal">
-          <div className="flex h-32 items-center justify-center rounded-xl border text-sm text-muted-foreground">
-            Journal coming in Phase 4
-          </div>
+        <TabsContent value="notes">
+          <BookNotesPanel book={book} />
         </TabsContent>
 
         <TabsContent value="analytics" className="min-h-0">
