@@ -59,6 +59,10 @@ CREATE TABLE IF NOT EXISTS book_notes (
   label      text NOT NULL CHECK (label IN ('quote','review','note')),
   title      text,
   content    text NOT NULL CHECK (length(btrim(content)) > 0),
+  page_start integer CHECK (page_start IS NULL OR page_start > 0),
+  page_end   integer CHECK (page_end IS NULL OR page_end > 0),
+  CONSTRAINT book_notes_page_range_valid
+    CHECK (page_end IS NULL OR (page_start IS NOT NULL AND page_end >= page_start)),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
