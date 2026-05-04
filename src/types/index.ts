@@ -49,6 +49,19 @@ export interface Book {
 
 export type BookUpdate = Partial<Omit<Book, "id" | "user_id" | "created_at">>;
 
+export type BookNoteLabel = "quote" | "review" | "note";
+
+export interface BookNote {
+  id: string;
+  user_id: string;
+  book_id: string;
+  label: BookNoteLabel;
+  title?: string | null;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ReadingLog {
   id: string;
   book_id: string;
