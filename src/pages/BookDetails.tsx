@@ -28,10 +28,10 @@ import { useBooksContext } from "@/context/BooksContext";
 import { useSeries } from "@/hooks/useSeries";
 import {
   formatAuthorsInput,
-  formatGenresInput,
   parseAuthorsInput,
-  parseGenresInput,
 } from "@/lib/utils";
+import { getAllowedGenres } from "@/lib/bookGenres";
+import GenreMultiSelect from "@/components/GenreMultiSelect";
 import ReadingProgressDialog from "@/components/ReadingProgressDialog";
 import BookAnalyticsPanel from "@/components/BookAnalyticsPanel";
 import BookNotesPanel from "@/components/BookNotesPanel";
@@ -48,7 +48,7 @@ interface FormValues {
   title: string;
   authorsInput: string;
   status: BookStatus;
-  genresInput: string;
+  genres: string[];
   isbn: string;
   language: BookLanguage | "";
   format: BookFormat | "";
@@ -85,7 +85,7 @@ function bookToFormValues(book: Book): FormValues {
     title: book.title,
     authorsInput: formatAuthorsInput(book.authors),
     status: book.status,
-    genresInput: formatGenresInput(book.genres),
+    genres: book.genres ?? [],
     isbn: book.isbn ?? "",
     language: book.language ?? "",
     format: book.format ?? "",
@@ -159,14 +159,13 @@ export default function BookDetails() {
 
   const status = watch("status") ?? book?.status ?? "Not Started";
   const seriesId = watch("series_id");
-  const genresInput = watch("genresInput") ?? "";
+  const genres = watch("genres") ?? book?.genres ?? [];
   const languageValue = watch("language") ?? "";
   const formatValue = watch("format") ?? "";
   const belongsToValue = watch("belongs_to") ?? "";
   const dateStartedValue = watch("date_started") ?? "";
   const dateFinishedValue = watch("date_finished") ?? "";
   const isbnValue = watch("isbn") ?? "";
-  const parsedGenres = parseGenresInput(genresInput);
   const showDateStarted = ["Reading", "Finished", "DNF"].includes(status);
   const showDateFinished = ["Finished", "DNF"].includes(status);
 
@@ -233,9 +232,9 @@ export default function BookDetails() {
       payload.authors = authors;
     }
     if (dirtyFields.status) payload.status = values.status;
-    if (dirtyFields.genresInput) {
-      const genres = parseGenresInput(values.genresInput);
-      payload.genres = genres.length > 0 ? genres : undefined;
+    if (dirtyFields.genres) {
+      const allowedGenres = getAllowedGenres(values.genres);
+      payload.genres = allowedGenres.length > 0 ? allowedGenres : undefined;
     }
     if (dirtyFields.isbn) {
       payload.isbn = values.isbn.trim() || undefined;
@@ -595,12 +594,20 @@ export default function BookDetails() {
 
                   {isEditMode ? (
                     <div className="space-y-1.5 md:col-span-2">
-                      <Label htmlFor="detail-genresInput">Genres</Label>
-                      <Input id="detail-genresInput" {...register("genresInput")} />
+                      <Label>Genres</Label>
+                      <Controller
+                        name="genres"
+                        control={control}
+                        render={({ field }) => (
+                          <GenreMultiSelect value={field.value ?? []} onChange={field.onChange} />
+                        )}
+                      />
                     </div>
                   ) : (
                     <PropertyBox title="Genres" className="md:col-span-2">
-                      <p className="text-sm font-medium">{parsedGenres.length > 0 ? parsedGenres.join(", ") : "Not set"}</p>
+                      <p className="text-sm font-medium">
+                        {genres.length > 0 ? genres.join(", ") : "Not set"}
+                      </p>
                     </PropertyBox>
                   )}
 
