@@ -4,8 +4,10 @@ import {
   Italic,
   List,
   MessageSquarePlus,
+  Pencil,
   Quote,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +15,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context";
-import { createBookNote, fetchBookNotes } from "@/lib/bookNotes";
+import {
+  createBookNote,
+  deleteBookNote,
+  fetchBookNotes,
+  updateBookNote,
+} from "@/lib/bookNotes";
 import { cn } from "@/lib/utils";
 import type { Book, BookNote, BookNoteLabel } from "@/types";
 
@@ -50,7 +57,9 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
   const [label, setLabel] = useState<BookNoteLabel>("note");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -96,11 +105,31 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
     setLabel("note");
     setTitle("");
     setContent("");
+    setEditingNoteId(null);
   }
 
   function closeComposer() {
     setIsComposerOpen(false);
     resetComposer();
+  }
+
+  function openCreateComposer() {
+    setErrorMsg(null);
+    resetComposer();
+    setIsComposerOpen(true);
+  }
+
+  function openEditComposer(note: BookNote) {
+    setErrorMsg(null);
+    setEditingNoteId(note.id);
+    setLabel(note.label);
+    setTitle(note.title ?? "");
+    setContent(note.content);
+    setIsComposerOpen(true);
+
+    window.requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
   }
 
   function insertMarkdown(prefix: string, suffix = "") {
@@ -129,19 +158,54 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
     try {
       setSaving(true);
       setErrorMsg(null);
-      const note = await createBookNote({
-        bookId: book.id,
-        userId: user.id,
-        label,
-        title,
-        content,
-      });
-      setNotes((current) => [note, ...current]);
+      if (editingNoteId) {
+        const note = await updateBookNote({
+          noteId: editingNoteId,
+          label,
+          title,
+          content,
+        });
+        setNotes((current) =>
+          current.map((currentNote) =>
+            currentNote.id === editingNoteId ? note : currentNote,
+          ),
+        );
+      } else {
+        const note = await createBookNote({
+          bookId: book.id,
+          userId: user.id,
+          label,
+          title,
+          content,
+        });
+        setNotes((current) => [note, ...current]);
+      }
       closeComposer();
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Failed to save note");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!editingNoteId || deleting) return;
+
+    const shouldDelete = window.confirm("Delete this note? This cannot be undone.");
+    if (!shouldDelete) return;
+
+    try {
+      setDeleting(true);
+      setErrorMsg(null);
+      await deleteBookNote(editingNoteId);
+      setNotes((current) =>
+        current.filter((currentNote) => currentNote.id !== editingNoteId),
+      );
+      closeComposer();
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to delete note");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -157,10 +221,8 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
         <Button
           type="button"
           size="sm"
-          onClick={() => {
-            setErrorMsg(null);
-            setIsComposerOpen(true);
-          }}
+          disabled={saving || deleting}
+          onClick={openCreateComposer}
         >
           <MessageSquarePlus className="mr-1.5 h-3.5 w-3.5" />
           Add entry
@@ -259,24 +321,41 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
             />
           </div>
 
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t p-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={saving}
-              onClick={closeComposer}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={saving || !content.trim()}
-              onClick={handleSave}
-            >
-              {saving ? "Saving..." : "Save"}
-            </Button>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t p-3">
+            <div>
+              {editingNoteId && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon-sm"
+                  aria-label="Delete note"
+                  title="Delete note"
+                  disabled={saving || deleting}
+                  onClick={handleDelete}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={saving || deleting}
+                onClick={closeComposer}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={saving || deleting || !content.trim()}
+                onClick={handleSave}
+              >
+                {saving ? "Saving..." : "Save"}
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -322,6 +401,20 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
               <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">
                 {note.content}
               </p>
+              <div className="mt-3 flex justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Edit note"
+                  title="Edit note"
+                  className="text-muted-foreground hover:text-foreground"
+                  disabled={saving || deleting}
+                  onClick={() => openEditComposer(note)}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </div>
             </article>
           ))}
         </div>
