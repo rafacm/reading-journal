@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeBookNoteInput } from "../src/lib/bookNotes";
+import {
+  normalizeBookNoteFields,
+  normalizeBookNoteInput,
+} from "../src/lib/bookNotes";
 
 test("normalizes book note title and content before insert", () => {
   assert.deepEqual(
@@ -44,5 +47,20 @@ test("rejects blank book note content", () => {
         content: "   ",
       }),
     /Note content is required/,
+  );
+});
+
+test("normalizes editable book note fields", () => {
+  assert.deepEqual(
+    normalizeBookNoteFields({
+      label: "review",
+      title: "  Final thoughts  ",
+      content: "  Strong ending.  ",
+    }),
+    {
+      label: "review",
+      title: "Final thoughts",
+      content: "Strong ending.",
+    },
   );
 });
