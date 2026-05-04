@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { ImagePlus, ScanBarcode, Loader2 } from "lucide-react";
 import BarcodeScanner from "@/components/BarcodeScanner";
+import GenreMultiSelect from "@/components/GenreMultiSelect";
 import { fetchBookByISBN } from "@/lib/bookLookup";
 import {
   Dialog,
@@ -25,17 +26,16 @@ import { useBooksContext } from "@/context/BooksContext";
 import { useSeries } from "@/hooks/useSeries";
 import {
   formatAuthorsInput,
-  formatGenresInput,
   parseAuthorsInput,
-  parseGenresInput,
 } from "@/lib/utils";
+import { getAllowedGenres } from "@/lib/bookGenres";
 import type { BookStatus, BookLanguage, BookBelongsTo, BookFormat, BookMetadataSource } from "@/types";
 
 interface FormValues {
   title: string;
   authorsInput: string;
   status: BookStatus;
-  genresInput: string;
+  genres: string[];
   language: BookLanguage | "";
   format: BookFormat | "";
   belongs_to: BookBelongsTo | "";
@@ -92,7 +92,7 @@ export default function AddBookDialog({ open, onOpenChange }: AddBookDialogProps
     clearErrors,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
-    defaultValues: { status: "Not Started", authorsInput: "" },
+    defaultValues: { status: "Not Started", authorsInput: "", genres: [] },
   });
 
   const status = watch("status");
@@ -147,7 +147,13 @@ export default function AddBookDialog({ open, onOpenChange }: AddBookDialogProps
       setValue("title", bookData.title);
       setValue("authorsInput", formatAuthorsInput(bookData.authors), { shouldValidate: true });
       if (bookData.totalPages) setValue("total_pages", String(bookData.totalPages));
-      if (bookData.genres) setValue("genresInput", formatGenresInput(bookData.genres));
+      if (bookData.genres) {
+        setValue("genres", getAllowedGenres(bookData.genres), {
+          shouldDirty: true,
+          shouldTouch: true,
+          shouldValidate: true,
+        });
+      }
       if (bookData.language) setValue("language", bookData.language as BookLanguage);
       if (bookData.format) setValue("format", bookData.format as BookFormat);
 
@@ -203,7 +209,7 @@ export default function AddBookDialog({ open, onOpenChange }: AddBookDialogProps
         setError("authorsInput", { message: "At least one author is required" });
         return;
       }
-      const genres = parseGenresInput(values.genresInput);
+      const genres = getAllowedGenres(values.genres);
       const result = await addBook(
         {
           title: values.title,
@@ -228,7 +234,7 @@ export default function AddBookDialog({ open, onOpenChange }: AddBookDialogProps
       );
 
       if (result.warning) {
-        reset({ status: "Not Started", authorsInput: "" });
+        reset({ status: "Not Started", authorsInput: "", genres: [] });
         setCoverFile(null);
         setCoverPreview(null);
         setShowScanner(false);
@@ -246,7 +252,7 @@ export default function AddBookDialog({ open, onOpenChange }: AddBookDialogProps
         return;
       }
 
-      reset();
+      reset({ status: "Not Started", authorsInput: "", genres: [] });
       setCoverFile(null);
       setCoverPreview(null);
       setShowScanner(false);
@@ -273,7 +279,7 @@ export default function AddBookDialog({ open, onOpenChange }: AddBookDialogProps
 
   function handleOpenChange(nextOpen: boolean) {
     if (!nextOpen) {
-      reset();
+      reset({ status: "Not Started", authorsInput: "", genres: [] });
       setCoverFile(null);
       setCoverPreview(null);
       setShowScanner(false);
@@ -440,10 +446,13 @@ export default function AddBookDialog({ open, onOpenChange }: AddBookDialogProps
 
               {/* Genres */}
               <div className="space-y-1.5">
-                <Label htmlFor="genresInput">Genres</Label>
-                <Input
-                  id="genresInput"
-                  {...register("genresInput")}
+                <Label>Genres</Label>
+                <Controller
+                  name="genres"
+                  control={control}
+                  render={({ field }) => (
+                    <GenreMultiSelect value={field.value ?? []} onChange={field.onChange} />
+                  )}
                 />
               </div>
 
