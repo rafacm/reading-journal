@@ -19,6 +19,7 @@ import {
   createBookNote,
   deleteBookNote,
   fetchBookNotes,
+  formatBookNotePageRange,
   updateBookNote,
 } from "@/lib/bookNotes";
 import { cn } from "@/lib/utils";
@@ -57,6 +58,8 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
   const [label, setLabel] = useState<BookNoteLabel>("note");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [pageStart, setPageStart] = useState("");
+  const [pageEnd, setPageEnd] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -105,6 +108,8 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
     setLabel("note");
     setTitle("");
     setContent("");
+    setPageStart("");
+    setPageEnd("");
     setEditingNoteId(null);
   }
 
@@ -125,6 +130,8 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
     setLabel(note.label);
     setTitle(note.title ?? "");
     setContent(note.content);
+    setPageStart(note.page_start ? String(note.page_start) : "");
+    setPageEnd(note.page_end ? String(note.page_end) : "");
     setIsComposerOpen(true);
 
     window.requestAnimationFrame(() => {
@@ -164,6 +171,8 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
           label,
           title,
           content,
+          pageStart,
+          pageEnd,
         });
         setNotes((current) =>
           current.map((currentNote) =>
@@ -177,6 +186,8 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
           label,
           title,
           content,
+          pageStart,
+          pageEnd,
         });
         setNotes((current) => [note, ...current]);
       }
@@ -308,6 +319,38 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
           </div>
 
           <div className="p-3">
+            <div className="mb-3 grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="note-page-start" className="text-xs">
+                  Page
+                </Label>
+                <Input
+                  id="note-page-start"
+                  type="number"
+                  min={1}
+                  step={1}
+                  inputMode="numeric"
+                  value={pageStart}
+                  onChange={(event) => setPageStart(event.target.value)}
+                  placeholder="42"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="note-page-end" className="text-xs">
+                  End page
+                </Label>
+                <Input
+                  id="note-page-end"
+                  type="number"
+                  min={1}
+                  step={1}
+                  inputMode="numeric"
+                  value={pageEnd}
+                  onChange={(event) => setPageEnd(event.target.value)}
+                  placeholder="45"
+                />
+              </div>
+            </div>
             <Label htmlFor="note-content" className="sr-only">
               Note content
             </Label>
@@ -383,40 +426,110 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
         </div>
       ) : (
         <div className="space-y-3">
-          {notes.map((note) => (
-            <article key={note.id} className="rounded-lg border p-3">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <Badge variant="outline" className={LABEL_STYLES[note.label]}>
-                  {labelText(note.label)}
-                </Badge>
-                <time className="text-xs text-muted-foreground" dateTime={note.created_at}>
-                  {formatNoteDate(note.created_at)}
-                </time>
-              </div>
-              {note.title && (
-                <h3 className="mb-1 text-sm font-heading leading-snug font-medium">
-                  {note.title}
-                </h3>
-              )}
-              <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">
-                {note.content}
-              </p>
-              <div className="mt-3 flex justify-end">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Edit note"
-                  title="Edit note"
-                  className="text-muted-foreground hover:text-foreground"
-                  disabled={saving || deleting}
-                  onClick={() => openEditComposer(note)}
+          {notes.map((note) => {
+            const pageRangeLabel = formatBookNotePageRange(note);
+
+            if (note.label === "quote") {
+              return (
+                <article
+                  key={note.id}
+                  className="rounded-lg border bg-background p-3 dark:bg-card"
                 >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-              </div>
-            </article>
-          ))}
+                  <div className="grid grid-cols-[2.25rem_1fr] gap-x-3">
+                    <div
+                      aria-hidden="true"
+                      className="text-5xl font-serif leading-none text-sky-600 dark:text-sky-400"
+                    >
+                      “
+                    </div>
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        {note.title && (
+                          <h3 className="mb-1 text-sm font-heading leading-snug font-medium">
+                            {note.title}
+                          </h3>
+                        )}
+                      </div>
+                      <time className="text-xs text-muted-foreground" dateTime={note.created_at}>
+                        {formatNoteDate(note.created_at)}
+                      </time>
+                    </div>
+
+                    <div className="ml-[0.7rem] border-l border-sky-500 dark:border-sky-400" />
+                    <div className="min-w-0">
+                      <blockquote className="whitespace-pre-wrap font-serif text-sm italic leading-6 text-foreground">
+                        {note.content}
+                      </blockquote>
+
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {pageRangeLabel && (
+                            <span className="text-xs font-medium text-muted-foreground">
+                              {pageRangeLabel}
+                            </span>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="Edit quote"
+                          title="Edit quote"
+                          className="text-muted-foreground hover:text-foreground"
+                          disabled={saving || deleting}
+                          onClick={() => openEditComposer(note)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              );
+            }
+
+            return (
+              <article key={note.id} className="rounded-lg border p-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className={LABEL_STYLES[note.label]}>
+                      {labelText(note.label)}
+                    </Badge>
+                    {pageRangeLabel && (
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {pageRangeLabel}
+                      </span>
+                    )}
+                  </div>
+                  <time className="text-xs text-muted-foreground" dateTime={note.created_at}>
+                    {formatNoteDate(note.created_at)}
+                  </time>
+                </div>
+                {note.title && (
+                  <h3 className="mb-1 text-sm font-heading leading-snug font-medium">
+                    {note.title}
+                  </h3>
+                )}
+                <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">
+                  {note.content}
+                </p>
+                <div className="mt-3 flex justify-end">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Edit note"
+                    title="Edit note"
+                    className="text-muted-foreground hover:text-foreground"
+                    disabled={saving || deleting}
+                    onClick={() => openEditComposer(note)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </section>

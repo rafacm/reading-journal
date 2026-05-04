@@ -58,6 +58,8 @@ export interface BookNote {
   label: BookNoteLabel;
   title?: string | null;
   content: string;
+  page_start?: number | null;
+  page_end?: number | null;
   created_at: string;
   updated_at: string;
 }
