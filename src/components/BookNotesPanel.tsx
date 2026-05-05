@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Bold,
+  Heart,
   Italic,
   List,
   MessageSquarePlus,
@@ -19,7 +20,9 @@ import {
   deleteBookNote,
   fetchBookNotes,
   formatBookNotePageRange,
+  sortBookNotes,
   updateBookNote,
+  updateBookNoteFavorite,
 } from "@/lib/bookNotes";
 import {
   noteMarkdownToEditorHtml,
@@ -44,11 +47,19 @@ const LABEL_STYLES: Record<BookNoteLabel, string> = {
 };
 
 function formatNoteDate(value: string): string {
-  return new Date(value).toLocaleDateString(undefined, {
+  const dateValue = value.includes("T") ? value : `${value}T00:00:00`;
+
+  return new Date(dateValue).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
   });
+}
+
+function getTodayLocalDate(): string {
+  const now = new Date();
+  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 10);
 }
 
 function labelText(label: BookNoteLabel): string {
@@ -170,6 +181,70 @@ function FormattedNoteContent({
   );
 }
 
+function CollapsibleNoteContent({
+  markdown,
+  className,
+  footerLeft,
+  footerRight,
+}: {
+  markdown: string;
+  className?: string;
+  footerLeft?: ReactNode;
+  footerRight?: ReactNode;
+}) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [canCollapse, setCanCollapse] = useState(false);
+
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+
+    const checkOverflow = () => {
+      setCanCollapse(content.scrollHeight > 145);
+    };
+
+    checkOverflow();
+    const resizeObserver = new ResizeObserver(checkOverflow);
+    resizeObserver.observe(content);
+
+    return () => resizeObserver.disconnect();
+  }, [markdown, isExpanded]);
+
+  return (
+    <div>
+      <div
+        ref={contentRef}
+        className={cn(
+          "overflow-hidden transition-[max-height]",
+          isExpanded ? "max-h-none" : "max-h-36",
+        )}
+      >
+        <FormattedNoteContent markdown={markdown} className={className} />
+      </div>
+      {(canCollapse || footerLeft || footerRight) && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {footerLeft}
+            {canCollapse && (
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="h-7 px-0"
+                onClick={() => setIsExpanded((current) => !current)}
+              >
+                {isExpanded ? "Show less" : "Show more"}
+              </Button>
+            )}
+          </div>
+          {footerRight}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function BookNotesPanel({ book }: BookNotesPanelProps) {
   const { user } = useAuth();
   const [notes, setNotes] = useState<BookNote[]>([]);
@@ -177,9 +252,10 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [label, setLabel] = useState<BookNoteLabel>("note");
   const [title, setTitle] = useState("");
+  const [quoteSpeaker, setQuoteSpeaker] = useState("");
   const [content, setContent] = useState("");
   const [pageStart, setPageStart] = useState("");
-  const [pageEnd, setPageEnd] = useState("");
+  const [noteDate, setNoteDate] = useState(getTodayLocalDate());
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -227,9 +303,10 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
   function resetComposer() {
     setLabel("note");
     setTitle("");
+    setQuoteSpeaker("");
     setContent("");
     setPageStart("");
-    setPageEnd("");
+    setNoteDate(getTodayLocalDate());
     setEditingNoteId(null);
   }
 
@@ -258,9 +335,10 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
     setEditingNoteId(note.id);
     setLabel(note.label);
     setTitle(note.title ?? "");
+    setQuoteSpeaker(note.quote_speaker ?? "");
     setContent(note.content);
     setPageStart(note.page_start ? String(note.page_start) : "");
-    setPageEnd(note.page_end ? String(note.page_end) : "");
+    setNoteDate(note.note_date ?? getTodayLocalDate());
     setIsComposerOpen(true);
     syncEditorFromMarkdown(note.content);
   }
@@ -299,14 +377,18 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
         const note = await updateBookNote({
           noteId: editingNoteId,
           label,
-          title,
+          title: label === "quote" ? "" : title,
+          quoteSpeaker: label === "quote" ? quoteSpeaker : "",
           content: editorContent,
           pageStart,
-          pageEnd,
+          noteDate,
+          isFavorite: notes.find((note) => note.id === editingNoteId)?.is_favorite,
         });
         setNotes((current) =>
-          current.map((currentNote) =>
-            currentNote.id === editingNoteId ? note : currentNote,
+          sortBookNotes(
+            current.map((currentNote) =>
+              currentNote.id === editingNoteId ? note : currentNote,
+            ),
           ),
         );
       } else {
@@ -314,12 +396,13 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
           bookId: book.id,
           userId: user.id,
           label,
-          title,
+          title: label === "quote" ? "" : title,
+          quoteSpeaker: label === "quote" ? quoteSpeaker : "",
           content: editorContent,
           pageStart,
-          pageEnd,
+          noteDate,
         });
-        setNotes((current) => [note, ...current]);
+        setNotes((current) => sortBookNotes([note, ...current]));
       }
       closeComposer();
     } catch (err) {
@@ -350,6 +433,224 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
     }
   }
 
+  async function toggleQuoteFavorite(note: BookNote) {
+    if (note.label !== "quote") return;
+
+    const next = !note.is_favorite;
+    setNotes((current) =>
+      current.map((currentNote) =>
+        currentNote.id === note.id ? { ...currentNote, is_favorite: next } : currentNote,
+      ),
+    );
+
+    try {
+      setErrorMsg(null);
+      const updatedNote = await updateBookNoteFavorite(note.id, next);
+      setNotes((current) =>
+        current.map((currentNote) =>
+          currentNote.id === note.id ? updatedNote : currentNote,
+        ),
+      );
+    } catch (err) {
+      setNotes((current) =>
+        current.map((currentNote) =>
+          currentNote.id === note.id ? { ...currentNote, is_favorite: note.is_favorite } : currentNote,
+        ),
+      );
+      setErrorMsg(err instanceof Error ? err.message : "Failed to update favorite");
+    }
+  }
+
+  function renderComposer(className = "mb-4") {
+    return (
+      <div className={cn("rounded-lg border bg-muted/20", className)}>
+        {label !== "quote" && (
+          <div className="border-b p-3">
+            <Label htmlFor="note-title" className="sr-only">
+              Title
+            </Label>
+            <Input
+              id="note-title"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Title"
+              className="border-0 bg-transparent px-0 text-base font-medium shadow-none focus-visible:ring-0"
+            />
+          </div>
+        )}
+
+        {label === "quote" && (
+          <div className="border-b p-3">
+            <Label htmlFor="note-quote-speaker" className="sr-only">
+              Quote speaker
+            </Label>
+            <Input
+              id="note-quote-speaker"
+              value={quoteSpeaker}
+              onChange={(event) => setQuoteSpeaker(event.target.value)}
+              placeholder="Who said this?"
+              className="border-0 bg-transparent px-0 text-base font-medium shadow-none focus-visible:ring-0"
+            />
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-1 border-b p-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Bold"
+            title="Bold"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => runEditorCommand("bold")}
+          >
+            <Bold className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Italic"
+            title="Italic"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => runEditorCommand("italic")}
+          >
+            <Italic className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Quote"
+            title="Quote"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => runEditorCommand("formatBlock")}
+          >
+            <Quote className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="List"
+            title="List"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => runEditorCommand("insertUnorderedList")}
+          >
+            <List className="h-4 w-4" />
+          </Button>
+
+          <div className="ml-1 h-5 w-px bg-border" />
+
+          <div className="flex flex-wrap gap-1">
+            {NOTE_LABELS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => {
+                  setLabel(option);
+                  if (option === "quote") setTitle("");
+                  if (option !== "quote") setQuoteSpeaker("");
+                }}
+                className={cn(
+                  "h-7 rounded-lg border px-2 text-xs font-medium transition-colors",
+                  label === option
+                    ? LABEL_STYLES[option]
+                    : "border-border bg-background text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {labelText(option)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-3">
+          <div className="mb-3 grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="note-page-start" className="text-xs">
+                Page
+              </Label>
+              <Input
+                id="note-page-start"
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                value={pageStart}
+                onChange={(event) => setPageStart(event.target.value)}
+                placeholder="42"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="note-date" className="text-xs">
+                Date
+              </Label>
+              <Input
+                id="note-date"
+                type="date"
+                value={noteDate}
+                onChange={(event) => setNoteDate(event.target.value)}
+              />
+            </div>
+          </div>
+          <Label htmlFor="note-content" className="sr-only">
+            Note content
+          </Label>
+          <div
+            id="note-content"
+            ref={editorRef}
+            role="textbox"
+            aria-multiline="true"
+            contentEditable
+            suppressContentEditableWarning
+            data-placeholder="Write your note..."
+            onInput={syncMarkdownFromEditor}
+            onBlur={syncMarkdownFromEditor}
+            className="min-h-40 rounded-md border-0 bg-transparent px-0 py-2 text-sm leading-6 shadow-none outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)] focus-visible:ring-0 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:italic [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t p-3">
+          <div>
+            {editingNoteId && (
+              <Button
+                type="button"
+                variant="destructive"
+                size="icon-sm"
+                aria-label="Delete note"
+                title="Delete note"
+                disabled={saving || deleting}
+                onClick={handleDelete}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={saving || deleting}
+              onClick={closeComposer}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={saving || deleting || !content.trim()}
+              onClick={handleSave}
+            >
+              {saving ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <section className="rounded-xl border p-4">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -370,176 +671,7 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
         </Button>
       </div>
 
-      {isComposerOpen && (
-        <div className="mb-4 rounded-lg border bg-muted/20">
-          <div className="border-b p-3">
-            <Label htmlFor="note-title" className="sr-only">
-              Title
-            </Label>
-            <Input
-              id="note-title"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Title"
-              className="border-0 bg-transparent px-0 text-base font-medium shadow-none focus-visible:ring-0"
-            />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1 border-b p-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Bold"
-              title="Bold"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => runEditorCommand("bold")}
-            >
-              <Bold className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Italic"
-              title="Italic"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => runEditorCommand("italic")}
-            >
-              <Italic className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Quote"
-              title="Quote"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => runEditorCommand("formatBlock")}
-            >
-              <Quote className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="List"
-              title="List"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => runEditorCommand("insertUnorderedList")}
-            >
-              <List className="h-4 w-4" />
-            </Button>
-
-            <div className="ml-1 h-5 w-px bg-border" />
-
-            <div className="flex flex-wrap gap-1">
-              {NOTE_LABELS.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setLabel(option)}
-                  className={cn(
-                    "h-7 rounded-lg border px-2 text-xs font-medium transition-colors",
-                    label === option
-                      ? LABEL_STYLES[option]
-                      : "border-border bg-background text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {labelText(option)}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="p-3">
-            <div className="mb-3 grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="note-page-start" className="text-xs">
-                  Page
-                </Label>
-                <Input
-                  id="note-page-start"
-                  type="number"
-                  min={1}
-                  step={1}
-                  inputMode="numeric"
-                  value={pageStart}
-                  onChange={(event) => setPageStart(event.target.value)}
-                  placeholder="42"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="note-page-end" className="text-xs">
-                  End page
-                </Label>
-                <Input
-                  id="note-page-end"
-                  type="number"
-                  min={1}
-                  step={1}
-                  inputMode="numeric"
-                  value={pageEnd}
-                  onChange={(event) => setPageEnd(event.target.value)}
-                  placeholder="45"
-                />
-              </div>
-            </div>
-            <Label htmlFor="note-content" className="sr-only">
-              Note content
-            </Label>
-            <div
-              id="note-content"
-              ref={editorRef}
-              role="textbox"
-              aria-multiline="true"
-              contentEditable
-              suppressContentEditableWarning
-              data-placeholder="Write your note..."
-              onInput={syncMarkdownFromEditor}
-              onBlur={syncMarkdownFromEditor}
-              className="min-h-40 rounded-md border-0 bg-transparent px-0 py-2 text-sm leading-6 shadow-none outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)] focus-visible:ring-0 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:italic [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5"
-            />
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t p-3">
-            <div>
-              {editingNoteId && (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="icon-sm"
-                  aria-label="Delete note"
-                  title="Delete note"
-                  disabled={saving || deleting}
-                  onClick={handleDelete}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={saving || deleting}
-                onClick={closeComposer}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                disabled={saving || deleting || !content.trim()}
-                onClick={handleSave}
-              >
-                {saving ? "Saving..." : "Save"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {isComposerOpen && !editingNoteId && renderComposer()}
 
       {errorMsg && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
@@ -566,61 +698,79 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
         <div className="space-y-3">
           {notes.map((note) => {
             const pageRangeLabel = formatBookNotePageRange(note);
+            const visibleDate = note.note_date ?? note.created_at;
+
+            if (editingNoteId === note.id) {
+              return <div key={note.id}>{renderComposer("mb-0")}</div>;
+            }
 
             if (note.label === "quote") {
               return (
                 <article
                   key={note.id}
-                  className="rounded-lg border bg-background p-3 dark:bg-card"
+                  className="relative rounded-lg border bg-background p-3 dark:bg-card"
                 >
-                  <div className="grid grid-cols-[2.25rem_1fr] gap-x-3">
-                    <div
-                      aria-hidden="true"
-                      className="text-5xl font-serif leading-none text-sky-600 dark:text-sky-400"
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Edit quote"
+                    title="Edit quote"
+                    className="absolute bottom-2 right-3 text-muted-foreground hover:text-foreground"
+                    disabled={saving || deleting}
+                    onClick={() => openEditComposer(note)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <div className="absolute right-3 top-3 flex items-center gap-1 bg-background pl-2 dark:bg-card">
+                    <button
+                      type="button"
+                      onClick={() => toggleQuoteFavorite(note)}
+                      aria-label={note.is_favorite ? "Remove from favorites" : "Add to favorites"}
+                      className="rounded p-0.5 transition-colors hover:bg-muted"
+                      disabled={saving || deleting}
                     >
-                      “
-                    </div>
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        {note.title && (
-                          <h3 className="mb-1 text-sm font-heading leading-snug font-medium">
-                            {note.title}
-                          </h3>
-                        )}
+                      <Heart
+                        className={`h-5 w-5 ${
+                          note.is_favorite
+                            ? "fill-rose-500 text-rose-500"
+                            : "text-muted-foreground"
+                        }`}
+                      />
+                    </button>
+                    <time className="text-xs text-muted-foreground" dateTime={visibleDate}>
+                      {formatNoteDate(visibleDate)}
+                    </time>
+                  </div>
+                  <div className="grid grid-cols-[3rem_1fr] gap-x-4">
+                    <div className="flex flex-col items-center">
+                      <div
+                        aria-hidden="true"
+                        className="font-serif text-5xl leading-none text-sky-600 dark:text-sky-400"
+                      >
+                        “
                       </div>
-                      <time className="text-xs text-muted-foreground" dateTime={note.created_at}>
-                        {formatNoteDate(note.created_at)}
-                      </time>
+                      <div className="-mt-3 w-px flex-1 bg-sky-500 dark:bg-sky-400" />
                     </div>
-
-                    <div className="ml-[0.7rem] border-l border-sky-500 dark:border-sky-400" />
-                    <div className="min-w-0">
-                      <FormattedNoteContent
+                    <div className="min-w-0 pr-36 sm:pr-44">
+                      <CollapsibleNoteContent
                         markdown={note.content}
                         className="font-serif text-sm italic leading-6 text-foreground"
+                        footerLeft={
+                          <div className="flex flex-wrap items-center gap-2">
+                            {note.quote_speaker && (
+                              <span className="font-serif text-sm italic text-muted-foreground">
+                                - {note.quote_speaker}
+                              </span>
+                            )}
+                            {pageRangeLabel && (
+                              <span className="text-xs font-medium text-muted-foreground">
+                                {pageRangeLabel}
+                              </span>
+                            )}
+                          </div>
+                        }
                       />
-
-                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {pageRangeLabel && (
-                            <span className="text-xs font-medium text-muted-foreground">
-                              {pageRangeLabel}
-                            </span>
-                          )}
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="Edit quote"
-                          title="Edit quote"
-                          className="text-muted-foreground hover:text-foreground"
-                          disabled={saving || deleting}
-                          onClick={() => openEditComposer(note)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </div>
                     </div>
                   </div>
                 </article>
@@ -640,8 +790,8 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
                       </span>
                     )}
                   </div>
-                  <time className="text-xs text-muted-foreground" dateTime={note.created_at}>
-                    {formatNoteDate(note.created_at)}
+                  <time className="text-xs text-muted-foreground" dateTime={visibleDate}>
+                    {formatNoteDate(visibleDate)}
                   </time>
                 </div>
                 {note.title && (
@@ -649,24 +799,24 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
                     {note.title}
                   </h3>
                 )}
-                <FormattedNoteContent
+                <CollapsibleNoteContent
                   markdown={note.content}
                   className="text-sm leading-6 text-foreground"
+                  footerRight={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Edit note"
+                      title="Edit note"
+                      className="text-muted-foreground hover:text-foreground"
+                      disabled={saving || deleting}
+                      onClick={() => openEditComposer(note)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  }
                 />
-                <div className="mt-3 flex justify-end">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Edit note"
-                    title="Edit note"
-                    className="text-muted-foreground hover:text-foreground"
-                    disabled={saving || deleting}
-                    onClick={() => openEditComposer(note)}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                </div>
               </article>
             );
           })}

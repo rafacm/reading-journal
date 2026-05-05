@@ -58,11 +58,11 @@ CREATE TABLE IF NOT EXISTS book_notes (
   book_id    uuid NOT NULL REFERENCES books(id) ON DELETE CASCADE,
   label      text NOT NULL CHECK (label IN ('quote','review','note')),
   title      text,
+  quote_speaker text,
   content    text NOT NULL CHECK (length(btrim(content)) > 0),
   page_start integer CHECK (page_start IS NULL OR page_start > 0),
-  page_end   integer CHECK (page_end IS NULL OR page_end > 0),
-  CONSTRAINT book_notes_page_range_valid
-    CHECK (page_end IS NULL OR (page_start IS NOT NULL AND page_end >= page_start)),
+  is_favorite boolean NOT NULL DEFAULT false,
+  note_date  date NOT NULL DEFAULT CURRENT_DATE,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -138,6 +138,7 @@ CREATE INDEX IF NOT EXISTS reading_logs_book_id_idx ON reading_logs(book_id);
 CREATE INDEX IF NOT EXISTS book_notes_user_id_idx ON book_notes(user_id);
 CREATE INDEX IF NOT EXISTS book_notes_book_id_idx ON book_notes(book_id);
 CREATE INDEX IF NOT EXISTS book_notes_book_created_at_idx ON book_notes(book_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS book_notes_book_note_date_idx ON book_notes(book_id, note_date DESC, created_at DESC);
 CREATE INDEX IF NOT EXISTS profiles_created_at_idx ON profiles(created_at);
 CREATE INDEX IF NOT EXISTS groups_created_by_idx ON groups(created_by);
 CREATE INDEX IF NOT EXISTS group_memberships_user_id_idx ON group_memberships(user_id);

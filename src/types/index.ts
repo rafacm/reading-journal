@@ -57,9 +57,11 @@ export interface BookNote {
   book_id: string;
   label: BookNoteLabel;
   title?: string | null;
+  quote_speaker?: string | null;
   content: string;
   page_start?: number | null;
-  page_end?: number | null;
+  is_favorite: boolean;
+  note_date: string;
   created_at: string;
   updated_at: string;
 }

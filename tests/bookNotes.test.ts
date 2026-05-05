@@ -4,7 +4,9 @@ import {
   formatBookNotePageRange,
   normalizeBookNoteFields,
   normalizeBookNoteInput,
+  sortBookNotes,
 } from "../src/lib/bookNotes";
+import type { BookNote } from "../src/types";
 
 test("normalizes book note title and content before insert", () => {
   assert.deepEqual(
@@ -13,16 +15,21 @@ test("normalizes book note title and content before insert", () => {
       userId: "user-1",
       label: "quote",
       title: "  Favorite line  ",
+      quoteSpeaker: "  Mae Holland  ",
       content: "  This stayed with me.  ",
+      noteDate: "2026-05-05",
+      isFavorite: true,
     }),
     {
       book_id: "book-1",
       user_id: "user-1",
       label: "quote",
-      title: "Favorite line",
+      title: null,
+      quote_speaker: "Mae Holland",
       content: "This stayed with me.",
       page_start: null,
-      page_end: null,
+      is_favorite: true,
+      note_date: "2026-05-05",
     },
   );
 });
@@ -58,14 +65,18 @@ test("normalizes editable book note fields", () => {
     normalizeBookNoteFields({
       label: "review",
       title: "  Final thoughts  ",
+      quoteSpeaker: "Should not save",
       content: "  Strong ending.  ",
+      noteDate: "2026-04-30",
     }),
     {
       label: "review",
       title: "Final thoughts",
+      quote_speaker: null,
       content: "Strong ending.",
       page_start: null,
-      page_end: null,
+      is_favorite: false,
+      note_date: "2026-04-30",
     },
   );
 });
@@ -76,63 +87,107 @@ test("normalizes a single source page", () => {
       label: "quote",
       content: "Important line.",
       pageStart: "42",
-      pageEnd: "",
+      noteDate: "2026-05-01",
     }),
     {
       label: "quote",
       title: null,
+      quote_speaker: null,
       content: "Important line.",
       page_start: 42,
-      page_end: null,
+      is_favorite: false,
+      note_date: "2026-05-01",
     },
   );
 });
 
-test("normalizes a source page range", () => {
+test("normalizes quote favorite only for quote entries", () => {
   assert.deepEqual(
     normalizeBookNoteFields({
-      label: "note",
-      content: "This section matters.",
-      pageStart: "42",
-      pageEnd: "45",
+      label: "quote",
+      content: "Favorite line.",
+      quoteSpeaker: "Annie",
+      isFavorite: true,
+      noteDate: "2026-05-02",
     }),
     {
-      label: "note",
+      label: "quote",
       title: null,
-      content: "This section matters.",
-      page_start: 42,
-      page_end: 45,
+      quote_speaker: "Annie",
+      content: "Favorite line.",
+      page_start: null,
+      is_favorite: true,
+      note_date: "2026-05-02",
     },
   );
 });
 
-test("rejects invalid source page ranges clearly", () => {
-  assert.throws(
-    () =>
-      normalizeBookNoteFields({
-        label: "note",
-        content: "Bad range.",
-        pageStart: "45",
-        pageEnd: "42",
-      }),
-    /End page must be the same as or after the start page/,
+test("does not store favorites for reviews or regular notes", () => {
+  assert.equal(
+    normalizeBookNoteFields({
+      label: "review",
+      content: "Thoughts.",
+      isFavorite: true,
+      noteDate: "2026-05-03",
+    }).is_favorite,
+    false,
   );
 });
 
-test("rejects an end page without a start page clearly", () => {
-  assert.throws(
-    () =>
-      normalizeBookNoteFields({
-        label: "quote",
-        content: "Missing start.",
-        pageEnd: "45",
-      }),
-    /Add a start page before adding an end page/,
+test("stores quote speaker only for quote entries", () => {
+  assert.equal(
+    normalizeBookNoteFields({
+      label: "quote",
+      content: "Quoted text.",
+      quoteSpeaker: "  Mae  ",
+      noteDate: "2026-05-04",
+    }).quote_speaker,
+    "Mae",
+  );
+
+  assert.equal(
+    normalizeBookNoteFields({
+      label: "note",
+      content: "Regular thought.",
+      quoteSpeaker: "Mae",
+      noteDate: "2026-05-04",
+    }).quote_speaker,
+    null,
   );
 });
 
 test("formats source page labels", () => {
-  assert.equal(formatBookNotePageRange({ page_start: null, page_end: null }), null);
-  assert.equal(formatBookNotePageRange({ page_start: 42, page_end: null }), "p. 42");
-  assert.equal(formatBookNotePageRange({ page_start: 42, page_end: 45 }), "pp. 42-45");
+  assert.equal(formatBookNotePageRange({ page_start: null }), null);
+  assert.equal(formatBookNotePageRange({ page_start: 42 }), "p. 42");
 });
+
+test("sorts notes by visible note date newest first", () => {
+  const notes = [
+    makeBookNote({ id: "older-created", note_date: "2026-05-01", created_at: "2026-05-02T08:00:00Z" }),
+    makeBookNote({ id: "newer-date", note_date: "2026-05-03", created_at: "2026-05-01T08:00:00Z" }),
+    makeBookNote({ id: "same-date-newer-created", note_date: "2026-05-01", created_at: "2026-05-03T08:00:00Z" }),
+  ];
+
+  assert.deepEqual(
+    sortBookNotes(notes).map((note) => note.id),
+    ["newer-date", "same-date-newer-created", "older-created"],
+  );
+});
+
+function makeBookNote(overrides: Partial<BookNote>): BookNote {
+  return {
+    id: "note-1",
+    user_id: "user-1",
+    book_id: "book-1",
+    label: "note",
+    title: null,
+    quote_speaker: null,
+    content: "Note",
+    page_start: null,
+    is_favorite: false,
+    note_date: "2026-05-01",
+    created_at: "2026-05-01T08:00:00Z",
+    updated_at: "2026-05-01T08:00:00Z",
+    ...overrides,
+  };
+}
