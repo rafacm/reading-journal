@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Bold,
   Italic,
@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/context";
 import {
   createBookNote,
@@ -22,6 +21,12 @@ import {
   formatBookNotePageRange,
   updateBookNote,
 } from "@/lib/bookNotes";
+import {
+  noteMarkdownToEditorHtml,
+  parseNoteMarkdown,
+  type NoteBlockNode,
+  type NoteInlineNode,
+} from "@/lib/noteFormatting";
 import { cn } from "@/lib/utils";
 import type { Book, BookNote, BookNoteLabel } from "@/types";
 
@@ -50,6 +55,121 @@ function labelText(label: BookNoteLabel): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
+function inlineNodeToMarkdown(node: ChildNode): string {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return (node.textContent ?? "").replace(/\u00a0/g, " ");
+  }
+
+  if (!(node instanceof HTMLElement)) return "";
+
+  const children = Array.from(node.childNodes).map(inlineNodeToMarkdown).join("");
+  const tagName = node.tagName.toLowerCase();
+
+  if (tagName === "br") return "\n";
+  if (tagName === "strong" || tagName === "b") return `**${children}**`;
+  if (tagName === "em" || tagName === "i") return `*${children}*`;
+  return children;
+}
+
+function blockNodeToMarkdown(node: ChildNode): string {
+  if (node.nodeType === Node.TEXT_NODE) return inlineNodeToMarkdown(node);
+  if (!(node instanceof HTMLElement)) return "";
+
+  const tagName = node.tagName.toLowerCase();
+
+  if (tagName === "blockquote") {
+    const quote = Array.from(node.childNodes).map(inlineNodeToMarkdown).join("").trim();
+    if (!quote) return "";
+    return quote
+      .split("\n")
+      .map((line) => `> ${line}`)
+      .join("\n");
+  }
+
+  if (tagName === "ul" || tagName === "ol") {
+    return Array.from(node.children)
+      .filter((child) => child.tagName.toLowerCase() === "li")
+      .map((child) => Array.from(child.childNodes).map(inlineNodeToMarkdown).join("").trim())
+      .filter((item) => item)
+      .map((item) => `- ${item}`)
+      .join("\n");
+  }
+
+  if (tagName === "div" || tagName === "p") {
+    return Array.from(node.childNodes).map(inlineNodeToMarkdown).join("").trim();
+  }
+
+  return Array.from(node.childNodes).map(inlineNodeToMarkdown).join("").trim();
+}
+
+function editorHtmlToMarkdown(html: string): string {
+  const container = document.createElement("div");
+  container.innerHTML = html;
+
+  return Array.from(container.childNodes)
+    .map(blockNodeToMarkdown)
+    .filter((block) => block.trim())
+    .join("\n")
+    .trim();
+}
+
+function renderInlineNodes(nodes: NoteInlineNode[]): ReactNode {
+  return nodes.map((node, index) => {
+    if (node.type === "text") {
+      return node.text.split("\n").map((line, lineIndex) => (
+        <span key={`${index}-${lineIndex}`}>
+          {lineIndex > 0 && <br />}
+          {line}
+        </span>
+      ));
+    }
+
+    if (node.type === "bold") {
+      return <strong key={index}>{renderInlineNodes(node.children)}</strong>;
+    }
+
+    return <em key={index}>{renderInlineNodes(node.children)}</em>;
+  });
+}
+
+function renderNoteBlock(block: NoteBlockNode, index: number): ReactNode {
+  if (block.type === "quote") {
+    return (
+      <blockquote key={index} className="border-l-2 border-border pl-3 italic">
+        {renderInlineNodes(block.children)}
+      </blockquote>
+    );
+  }
+
+  if (block.type === "list") {
+    return (
+      <ul key={index} className="list-disc space-y-1 pl-5">
+        {block.items.map((item, itemIndex) => (
+          <li key={itemIndex}>{renderInlineNodes(item)}</li>
+        ))}
+      </ul>
+    );
+  }
+
+  return <p key={index}>{renderInlineNodes(block.children)}</p>;
+}
+
+function FormattedNoteContent({
+  markdown,
+  className,
+}: {
+  markdown: string;
+  className?: string;
+}) {
+  const blocks = parseNoteMarkdown(markdown);
+
+  return (
+    <div className={cn("space-y-2 whitespace-normal", className)}>
+      {blocks.map(renderNoteBlock)}
+    </div>
+  );
+}
+
 export default function BookNotesPanel({ book }: BookNotesPanelProps) {
   const { user } = useAuth();
   const [notes, setNotes] = useState<BookNote[]>([]);
@@ -64,7 +184,7 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
 
   async function loadNotes() {
     try {
@@ -118,10 +238,19 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
     resetComposer();
   }
 
+  function syncEditorFromMarkdown(markdown: string) {
+    window.requestAnimationFrame(() => {
+      if (!editorRef.current) return;
+      editorRef.current.innerHTML = noteMarkdownToEditorHtml(markdown);
+      editorRef.current.focus();
+    });
+  }
+
   function openCreateComposer() {
     setErrorMsg(null);
     resetComposer();
     setIsComposerOpen(true);
+    syncEditorFromMarkdown("");
   }
 
   function openEditComposer(note: BookNote) {
@@ -133,34 +262,35 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
     setPageStart(note.page_start ? String(note.page_start) : "");
     setPageEnd(note.page_end ? String(note.page_end) : "");
     setIsComposerOpen(true);
-
-    window.requestAnimationFrame(() => {
-      textareaRef.current?.focus();
-    });
+    syncEditorFromMarkdown(note.content);
   }
 
-  function insertMarkdown(prefix: string, suffix = "") {
-    const textarea = textareaRef.current;
-    if (!textarea) {
-      setContent((current) => `${current}${prefix}${suffix}`);
-      return;
+  function syncMarkdownFromEditor() {
+    if (!editorRef.current) return;
+    setContent(editorHtmlToMarkdown(editorRef.current.innerHTML));
+  }
+
+  function runEditorCommand(command: "bold" | "italic" | "formatBlock" | "insertUnorderedList") {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    editor.focus();
+    if (command === "formatBlock") {
+      document.execCommand(command, false, "blockquote");
+    } else {
+      document.execCommand(command);
     }
 
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selected = content.slice(start, end);
-    const next = `${content.slice(0, start)}${prefix}${selected}${suffix}${content.slice(end)}`;
-    const cursor = start + prefix.length + selected.length + suffix.length;
-
-    setContent(next);
     window.requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(cursor, cursor);
+      syncMarkdownFromEditor();
     });
   }
 
   async function handleSave() {
-    if (!user || !content.trim()) return;
+    const editorContent = editorRef.current
+      ? editorHtmlToMarkdown(editorRef.current.innerHTML)
+      : content;
+    if (!user || !editorContent.trim()) return;
 
     try {
       setSaving(true);
@@ -170,7 +300,7 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
           noteId: editingNoteId,
           label,
           title,
-          content,
+          content: editorContent,
           pageStart,
           pageEnd,
         });
@@ -185,7 +315,7 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
           userId: user.id,
           label,
           title,
-          content,
+          content: editorContent,
           pageStart,
           pageEnd,
         });
@@ -262,7 +392,8 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
               size="icon-sm"
               aria-label="Bold"
               title="Bold"
-              onClick={() => insertMarkdown("**", "**")}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => runEditorCommand("bold")}
             >
               <Bold className="h-4 w-4" />
             </Button>
@@ -272,7 +403,8 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
               size="icon-sm"
               aria-label="Italic"
               title="Italic"
-              onClick={() => insertMarkdown("*", "*")}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => runEditorCommand("italic")}
             >
               <Italic className="h-4 w-4" />
             </Button>
@@ -282,7 +414,8 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
               size="icon-sm"
               aria-label="Quote"
               title="Quote"
-              onClick={() => insertMarkdown("> ")}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => runEditorCommand("formatBlock")}
             >
               <Quote className="h-4 w-4" />
             </Button>
@@ -292,7 +425,8 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
               size="icon-sm"
               aria-label="List"
               title="List"
-              onClick={() => insertMarkdown("- ")}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => runEditorCommand("insertUnorderedList")}
             >
               <List className="h-4 w-4" />
             </Button>
@@ -354,13 +488,17 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
             <Label htmlFor="note-content" className="sr-only">
               Note content
             </Label>
-            <Textarea
+            <div
               id="note-content"
-              ref={textareaRef}
-              value={content}
-              onChange={(event) => setContent(event.target.value)}
-              placeholder="Write your note..."
-              className="min-h-40 resize-y border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+              ref={editorRef}
+              role="textbox"
+              aria-multiline="true"
+              contentEditable
+              suppressContentEditableWarning
+              data-placeholder="Write your note..."
+              onInput={syncMarkdownFromEditor}
+              onBlur={syncMarkdownFromEditor}
+              className="min-h-40 rounded-md border-0 bg-transparent px-0 py-2 text-sm leading-6 shadow-none outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)] focus-visible:ring-0 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:italic [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5"
             />
           </div>
 
@@ -457,9 +595,10 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
 
                     <div className="ml-[0.7rem] border-l border-sky-500 dark:border-sky-400" />
                     <div className="min-w-0">
-                      <blockquote className="whitespace-pre-wrap font-serif text-sm italic leading-6 text-foreground">
-                        {note.content}
-                      </blockquote>
+                      <FormattedNoteContent
+                        markdown={note.content}
+                        className="font-serif text-sm italic leading-6 text-foreground"
+                      />
 
                       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-2">
@@ -510,9 +649,10 @@ export default function BookNotesPanel({ book }: BookNotesPanelProps) {
                     {note.title}
                   </h3>
                 )}
-                <p className="whitespace-pre-wrap text-sm leading-6 text-foreground">
-                  {note.content}
-                </p>
+                <FormattedNoteContent
+                  markdown={note.content}
+                  className="text-sm leading-6 text-foreground"
+                />
                 <div className="mt-3 flex justify-end">
                   <Button
                     type="button"
