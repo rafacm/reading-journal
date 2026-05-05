@@ -5,17 +5,21 @@ export interface CreateBookNoteInput {
   userId: string;
   label: BookNoteLabel;
   title?: string;
+  quoteSpeaker?: string;
   content: string;
   pageStart?: string | number | null;
-  pageEnd?: string | number | null;
+  noteDate?: string | null;
+  isFavorite?: boolean;
 }
 
 export interface BookNoteFieldsInput {
   label: BookNoteLabel;
   title?: string;
+  quoteSpeaker?: string;
   content: string;
   pageStart?: string | number | null;
-  pageEnd?: string | number | null;
+  noteDate?: string | null;
+  isFavorite?: boolean;
 }
 
 export interface NormalizedBookNoteInput {
@@ -23,17 +27,21 @@ export interface NormalizedBookNoteInput {
   user_id: string;
   label: BookNoteLabel;
   title: string | null;
+  quote_speaker: string | null;
   content: string;
   page_start: number | null;
-  page_end: number | null;
+  is_favorite: boolean;
+  note_date: string;
 }
 
 export interface NormalizedBookNoteFields {
   label: BookNoteLabel;
   title: string | null;
+  quote_speaker: string | null;
   content: string;
   page_start: number | null;
-  page_end: number | null;
+  is_favorite: boolean;
+  note_date: string;
 }
 
 export interface UpdateBookNoteInput extends BookNoteFieldsInput {
@@ -59,12 +67,28 @@ function normalizePageValue(
   return page;
 }
 
+function getTodayLocalDate(): string {
+  const now = new Date();
+  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 10);
+}
+
+function normalizeNoteDate(value: string | null | undefined): string {
+  const normalizedValue = value?.trim();
+  if (!normalizedValue) return getTodayLocalDate();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedValue)) {
+    throw new Error("Note date must use the YYYY-MM-DD format");
+  }
+
+  return normalizedValue;
+}
+
 export function formatBookNotePageRange(
-  note: Pick<BookNote, "page_start" | "page_end">,
+  note: Pick<BookNote, "page_start">,
 ): string | null {
   if (!note.page_start) return null;
-  if (!note.page_end || note.page_end === note.page_start) return `p. ${note.page_start}`;
-  return `pp. ${note.page_start}-${note.page_end}`;
+  return `p. ${note.page_start}`;
 }
 
 export function normalizeBookNoteFields(
@@ -72,26 +96,20 @@ export function normalizeBookNoteFields(
 ): NormalizedBookNoteFields {
   const content = input.content.trim();
   const pageStart = normalizePageValue(input.pageStart, "Start page");
-  const pageEnd = normalizePageValue(input.pageEnd, "End page");
 
   if (!content) {
     throw new Error("Note content is required");
   }
 
-  if (pageEnd && !pageStart) {
-    throw new Error("Add a start page before adding an end page");
-  }
-
-  if (pageStart && pageEnd && pageEnd < pageStart) {
-    throw new Error("End page must be the same as or after the start page");
-  }
-
   return {
     label: input.label,
-    title: input.title?.trim() || null,
+    title: input.label === "quote" ? null : input.title?.trim() || null,
+    quote_speaker:
+      input.label === "quote" ? input.quoteSpeaker?.trim() || null : null,
     content,
     page_start: pageStart,
-    page_end: pageEnd && pageEnd !== pageStart ? pageEnd : null,
+    is_favorite: input.label === "quote" ? Boolean(input.isFavorite) : false,
+    note_date: normalizeNoteDate(input.noteDate),
   };
 }
 
@@ -105,16 +123,27 @@ export function normalizeBookNoteInput(
   };
 }
 
+export function sortBookNotes(notes: BookNote[]): BookNote[] {
+  return [...notes].sort((a, b) => {
+    const aDate = a.note_date ?? a.created_at;
+    const bDate = b.note_date ?? b.created_at;
+    const dateCompare = bDate.localeCompare(aDate);
+    if (dateCompare !== 0) return dateCompare;
+    return b.created_at.localeCompare(a.created_at);
+  });
+}
+
 export async function fetchBookNotes(bookId: string): Promise<BookNote[]> {
   const { supabase } = await import("./supabase");
   const { data, error } = await supabase
     .from("book_notes")
     .select("*")
     .eq("book_id", bookId)
+    .order("note_date", { ascending: false })
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as BookNote[];
+  return sortBookNotes((data ?? []) as BookNote[]);
 }
 
 export async function createBookNote(
@@ -144,6 +173,26 @@ export async function updateBookNote(
       updated_at: new Date().toISOString(),
     })
     .eq("id", input.noteId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as BookNote;
+}
+
+export async function updateBookNoteFavorite(
+  noteId: string,
+  isFavorite: boolean,
+): Promise<BookNote> {
+  const { supabase } = await import("./supabase");
+  const { data, error } = await supabase
+    .from("book_notes")
+    .update({
+      is_favorite: isFavorite,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", noteId)
+    .eq("label", "quote")
     .select()
     .single();
 
