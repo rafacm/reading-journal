@@ -146,6 +146,18 @@ export async function fetchBookNotes(bookId: string): Promise<BookNote[]> {
   return sortBookNotes((data ?? []) as BookNote[]);
 }
 
+export async function fetchAllBookNotes(): Promise<BookNote[]> {
+  const { supabase } = await import("./supabase");
+  const { data, error } = await supabase
+    .from("book_notes")
+    .select("*")
+    .order("note_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return sortBookNotes((data ?? []) as BookNote[]);
+}
+
 export async function createBookNote(
   input: CreateBookNoteInput,
 ): Promise<BookNote> {
