@@ -15,6 +15,12 @@ export function statusVariant(
   return "outline";
 }
 
+export function getTodayLocalDate(): string {
+  const now = new Date();
+  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 10);
+}
+
 export function parseGenresInput(input: string): string[] {
   return Array.from(
     new Set(

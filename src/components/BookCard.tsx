@@ -5,7 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import ReadingProgressDialog from "@/components/ReadingProgressDialog";
 import { Button } from "@/components/ui/button";
 import { useBooksContext } from "@/context/BooksContext";
-import { statusVariant } from "@/lib/utils";
+import { getTodayLocalDate, statusVariant } from "@/lib/utils";
 import type { Book } from "@/types";
 
 interface BookCardProps {
@@ -89,7 +89,17 @@ export default function BookCard({
             <ReadingProgressDialog
               book={book}
               onProgressSaved={async (newPage) => {
-                await updateBook(book.id, { current_page: newPage });
+                const shouldFinish = hasTotalPages && newPage >= totalPages;
+
+                await updateBook(book.id, {
+                  current_page: newPage,
+                  ...(shouldFinish
+                    ? {
+                        status: "Finished",
+                        ...(book.date_finished ? {} : { date_finished: getTodayLocalDate() }),
+                      }
+                    : {}),
+                });
               }}
               trigger={
                 <Button
