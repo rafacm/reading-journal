@@ -1,4 +1,4 @@
-import type { Book, Series } from "@/types";
+import type { Book, BookNote, Series } from "@/types";
 
 export type BookSearchPropertyKey =
   | "title"
@@ -48,6 +48,17 @@ export interface BookSearchMatch {
 export interface BookSearchSection {
   property: BookSearchProperty;
   matches: BookSearchMatch[];
+}
+
+export interface BookNoteSearchMatch {
+  note: BookNote;
+  book: Book;
+  values: string[];
+}
+
+export interface SearchHighlightPart {
+  text: string;
+  highlighted: boolean;
 }
 
 export const BOOK_SEARCH_PROPERTIES: Array<{
@@ -198,12 +209,89 @@ export function searchBooks(
     .filter((section) => section.matches.length > 0);
 }
 
+export function searchBookNotes(
+  notes: BookNote[],
+  books: Book[],
+  query: string,
+): BookNoteSearchMatch[] {
+  const normalizedQuery = normalize(query);
+  if (!normalizedQuery) return [];
+
+  const booksById = new Map(books.map((book) => [book.id, book]));
+
+  return notes
+    .map((note): BookNoteSearchMatch | null => {
+      const book = booksById.get(note.book_id);
+      if (!book) return null;
+
+      const values = unique([note.content].filter(Boolean));
+      const matchedValues = values.filter((value) => matchesQuery(value, normalizedQuery));
+      if (matchedValues.length === 0) return null;
+
+      return {
+        note,
+        book,
+        values: matchedValues,
+      };
+    })
+    .filter((match): match is BookNoteSearchMatch => match !== null);
+}
+
 export function normalize(value: string): string {
   return value
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
     .trim();
+}
+
+export function getSearchHighlightParts(
+  value: string,
+  query: string,
+): SearchHighlightPart[] {
+  const normalizedQuery = normalize(query);
+  if (!value || !normalizedQuery) {
+    return [{ text: value, highlighted: false }];
+  }
+
+  const exactRanges = findExactRanges(value, query.trim());
+  if (exactRanges.length > 0) {
+    return splitIntoHighlightParts(value, exactRanges);
+  }
+
+  const queryTokens = tokenize(normalizedQuery);
+  if (queryTokens.length === 0) {
+    return [{ text: value, highlighted: false }];
+  }
+
+  const ranges: Array<{ start: number; end: number }> = [];
+  const valueTokenPattern = /[a-z0-9]+/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = valueTokenPattern.exec(value)) !== null) {
+    const token = match[0];
+    const normalizedToken = normalize(token);
+
+    queryTokens.forEach((queryToken) => {
+      const exactIndex = normalizedToken.indexOf(queryToken);
+      if (exactIndex >= 0) {
+        ranges.push({
+          start: match!.index + exactIndex,
+          end: match!.index + exactIndex + queryToken.length,
+        });
+        return;
+      }
+
+      if (isFuzzyTokenMatch(normalizedToken, queryToken)) {
+        ranges.push({
+          start: match!.index,
+          end: match!.index + token.length,
+        });
+      }
+    });
+  }
+
+  return splitIntoHighlightParts(value, ranges);
 }
 
 function matchesQuery(value: string, normalizedQuery: string): boolean {
@@ -220,6 +308,89 @@ function matchesQuery(value: string, normalizedQuery: string): boolean {
         valueToken.includes(queryToken) ||
         isFuzzyTokenMatch(valueToken, queryToken)
     )
+  );
+}
+
+function findExactRanges(
+  value: string,
+  query: string,
+): Array<{ start: number; end: number }> {
+  if (!query) return [];
+
+  const normalizedValue = value.toLowerCase();
+  const normalizedQuery = query.toLowerCase();
+  const ranges: Array<{ start: number; end: number }> = [];
+  let searchFrom = 0;
+  let matchIndex = normalizedValue.indexOf(normalizedQuery, searchFrom);
+
+  while (matchIndex >= 0) {
+    ranges.push({ start: matchIndex, end: matchIndex + query.length });
+    searchFrom = matchIndex + query.length;
+    matchIndex = normalizedValue.indexOf(normalizedQuery, searchFrom);
+  }
+
+  return ranges;
+}
+
+function splitIntoHighlightParts(
+  value: string,
+  ranges: Array<{ start: number; end: number }>,
+): SearchHighlightPart[] {
+  const mergedRanges = mergeRanges(ranges, value.length);
+  if (mergedRanges.length === 0) return [{ text: value, highlighted: false }];
+
+  const parts: SearchHighlightPart[] = [];
+  let currentIndex = 0;
+
+  mergedRanges.forEach((range) => {
+    if (range.start > currentIndex) {
+      parts.push({
+        text: value.slice(currentIndex, range.start),
+        highlighted: false,
+      });
+    }
+
+    parts.push({
+      text: value.slice(range.start, range.end),
+      highlighted: true,
+    });
+    currentIndex = range.end;
+  });
+
+  if (currentIndex < value.length) {
+    parts.push({
+      text: value.slice(currentIndex),
+      highlighted: false,
+    });
+  }
+
+  return parts;
+}
+
+function mergeRanges(
+  ranges: Array<{ start: number; end: number }>,
+  valueLength: number,
+): Array<{ start: number; end: number }> {
+  const normalizedRanges = ranges
+    .map((range) => ({
+      start: Math.max(0, Math.min(range.start, valueLength)),
+      end: Math.max(0, Math.min(range.end, valueLength)),
+    }))
+    .filter((range) => range.start < range.end)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  return normalizedRanges.reduce<Array<{ start: number; end: number }>>(
+    (merged, range) => {
+      const previous = merged[merged.length - 1];
+      if (!previous || range.start > previous.end) {
+        merged.push({ ...range });
+        return merged;
+      }
+
+      previous.end = Math.max(previous.end, range.end);
+      return merged;
+    },
+    [],
   );
 }
 

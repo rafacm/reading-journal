@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { searchBooks, type BookSearchPropertyKey } from "../src/lib/bookSearch";
-import type { Book, Series } from "../src/types";
+import {
+  getSearchHighlightParts,
+  searchBookNotes,
+  searchBooks,
+  type BookSearchPropertyKey,
+} from "../src/lib/bookSearch";
+import type { Book, BookNote, Series } from "../src/types";
 
 const series: Series[] = [
   {
@@ -32,6 +37,24 @@ function makeBook(overrides: Partial<Book>): Book {
     volume_number: 1,
     user_id: "user-1",
     created_at: "2026-04-01T10:00:00Z",
+    ...overrides,
+  };
+}
+
+function makeBookNote(overrides: Partial<BookNote>): BookNote {
+  return {
+    id: "note-1",
+    user_id: "user-1",
+    book_id: "book-1",
+    label: "note",
+    title: "Reading thought",
+    quote_speaker: null,
+    content: "The stone eater scenes reveal the hidden history.",
+    page_start: 42,
+    is_favorite: false,
+    note_date: "2026-04-15",
+    created_at: "2026-04-15T10:00:00Z",
+    updated_at: "2026-04-15T10:00:00Z",
     ...overrides,
   };
 }
@@ -146,4 +169,73 @@ test("searches user-visible property values but not internal fields", () => {
   });
 
   assert.deepEqual(searchBooks([book], "hidden", { series }), []);
+});
+
+test("matches note body content", () => {
+  const book = makeBook({});
+  const note = makeBookNote({});
+  const matches = searchBookNotes([note], [book], "hidden history");
+
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].note.id, "note-1");
+  assert.equal(matches[0].book.id, "book-1");
+  assert.deepEqual(matches[0].values, [
+    "The stone eater scenes reveal the hidden history.",
+  ]);
+});
+
+test("matches note body content case-insensitively and fuzzily", () => {
+  const book = makeBook({});
+  const note = makeBookNote({
+    content: "A careful meditation on memory and survival.",
+  });
+  const matches = searchBookNotes([note], [book], "Memmory");
+
+  assert.deepEqual(
+    matches.map((match) => match.note.id),
+    ["note-1"]
+  );
+});
+
+test("does not return note matches for books that are not loaded", () => {
+  const note = makeBookNote({ book_id: "missing-book" });
+
+  assert.deepEqual(searchBookNotes([note], [makeBook({})], "hidden"), []);
+});
+
+test("returns no note matches for an empty query", () => {
+  assert.deepEqual(searchBookNotes([makeBookNote({})], [makeBook({})], "   "), []);
+});
+
+test("searches note body content but not hidden note fields", () => {
+  const note = makeBookNote({
+    id: "hidden-note-id",
+    user_id: "hidden-user-id",
+    book_id: "book-1",
+    content: "Visible reading thought",
+  });
+
+  assert.deepEqual(searchBookNotes([note], [makeBook({})], "hidden"), []);
+});
+
+test("highlights exact search phrases", () => {
+  assert.deepEqual(getSearchHighlightParts("The Fifth Season", "fifth"), [
+    { text: "The ", highlighted: false },
+    { text: "Fifth", highlighted: true },
+    { text: " Season", highlighted: false },
+  ]);
+});
+
+test("highlights each query token when the full phrase is not present", () => {
+  assert.deepEqual(getSearchHighlightParts("Science Fiction", "science book"), [
+    { text: "Science", highlighted: true },
+    { text: " Fiction", highlighted: false },
+  ]);
+});
+
+test("highlights a whole word for fuzzy search matches", () => {
+  assert.deepEqual(getSearchHighlightParts("memory and survival", "memmory"), [
+    { text: "memory", highlighted: true },
+    { text: " and survival", highlighted: false },
+  ]);
 });
