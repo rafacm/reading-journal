@@ -28,6 +28,7 @@ import { useBooksContext } from "@/context/BooksContext";
 import { useSeries } from "@/hooks/useSeries";
 import {
   formatAuthorsInput,
+  getTodayLocalDate,
   parseAuthorsInput,
 } from "@/lib/utils";
 import { getAllowedGenres } from "@/lib/bookGenres";
@@ -103,12 +104,6 @@ function formatDateForDisplay(value: string): string {
   const [year, month, day] = value.split("-");
   if (!year || !month || !day) return value;
   return `${day}.${month}.${year}`;
-}
-
-function getTodayLocalDate(): string {
-  const now = new Date();
-  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-  return localDate.toISOString().slice(0, 10);
 }
 
 export default function BookDetails() {

@@ -7,6 +7,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { notifyBookFinished } from "@/lib/confetti";
 import type { Book } from "@/types";
 
 interface ReadingProgressDialogProps {
@@ -49,8 +50,15 @@ export default function ReadingProgressDialog({
           hideTrigger
           onCancel={() => handleOpenChange(false)}
           onProgressSaved={async (newPage) => {
+            const totalPages = book.total_pages ?? 0;
+            const finishedBook = totalPages > 0 && newPage >= totalPages;
+
             await onProgressSaved(newPage);
             handleOpenChange(false);
+
+            if (finishedBook) {
+              notifyBookFinished();
+            }
           }}
         />
       </DialogContent>
