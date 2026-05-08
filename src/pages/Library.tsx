@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { BookOpen, ChevronLeft, ChevronRight, Heart, RefreshCw } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronLeft, ChevronRight, Heart, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useBooksContext } from "@/context/BooksContext";
@@ -12,16 +12,25 @@ import {
   type NoteInlineNode,
 } from "@/lib/noteFormatting";
 import {
+  buildMultiValueGroups,
   buildNoteGroups,
   buildRatingGroups,
+  buildSeriesGroups,
+  buildShelfValueSummaries,
+  buildSingleValueGroups,
+  countUniqueBookValues,
+  filterBooksByShelfValue,
+  filterNotesByShelfValue,
   sortBooksByTitle,
   type BookGroup,
+  type LibraryValueShelf,
   type LibraryNote,
   type NoteGroup,
+  type ShelfValueSummary,
 } from "@/lib/libraryShelves";
 import { cn } from "@/lib/utils";
 import BookCard from "@/components/BookCard";
-import type { Book, BookNote, Series } from "@/types";
+import type { Book, BookNote } from "@/types";
 
 type LibraryView =
   | "all"
@@ -47,11 +56,11 @@ type PrimaryShelf = {
 };
 
 type CategoryShelf = {
-  value: LibraryView;
+  value: LibraryValueShelf;
   label: string;
 };
 
-const UNCATEGORIZED = "Uncategorized";
+const SHELF_VALUE_PREVIEW_LIMIT = 10;
 
 const primaryShelves: PrimaryShelf[] = [
   {
@@ -116,106 +125,16 @@ function viewPath(view: LibraryView) {
   return `/library?view=${view}`;
 }
 
-function sortBooksByVolume(books: Book[]) {
-  return [...books].sort((a, b) => {
-    const volumeA = a.volume_number ?? Number.MAX_SAFE_INTEGER;
-    const volumeB = b.volume_number ?? Number.MAX_SAFE_INTEGER;
-
-    if (volumeA !== volumeB) return volumeA - volumeB;
-    return a.title.localeCompare(b.title, undefined, { sensitivity: "base", numeric: true });
-  });
+function valueListPath(view: LibraryValueShelf) {
+  return `/library?view=${view}&list=all`;
 }
 
-function sortGroups(groups: BookGroup[]) {
-  return [...groups].sort((a, b) => {
-    if (a.name === UNCATEGORIZED) return 1;
-    if (b.name === UNCATEGORIZED) return -1;
-    return a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
-  });
+function valuePath(view: LibraryValueShelf, value: string) {
+  return `/library?view=${view}&value=${encodeURIComponent(value)}`;
 }
 
-function addBookToGroup(groups: Map<string, Book[]>, groupName: string, book: Book) {
-  const existingBooks = groups.get(groupName) ?? [];
-  existingBooks.push(book);
-  groups.set(groupName, existingBooks);
-}
-
-function uniqueCleanValues(values: string[] | undefined) {
-  return Array.from(new Set(values?.map((value) => value.trim()).filter(Boolean)));
-}
-
-function countUniqueBookValues(
-  books: Book[],
-  getValues: (book: Book) => string[] | undefined
-) {
-  const values = new Set<string>();
-
-  books.forEach((book) => {
-    uniqueCleanValues(getValues(book)).forEach((value) => values.add(value));
-  });
-
-  return values.size;
-}
-
-function buildMultiValueGroups(
-  books: Book[],
-  getValues: (book: Book) => string[] | undefined
-) {
-  const groups = new Map<string, Book[]>();
-
-  books.forEach((book) => {
-    const values = uniqueCleanValues(getValues(book));
-
-    if (values.length === 0) {
-      addBookToGroup(groups, UNCATEGORIZED, book);
-      return;
-    }
-
-    values.forEach((value) => addBookToGroup(groups, value, book));
-  });
-
-  return sortGroups(
-    Array.from(groups, ([name, groupBooks]) => ({
-      name,
-      books: sortBooksByTitle(groupBooks),
-    }))
-  );
-}
-
-function buildSingleValueGroups(books: Book[], getValue: (book: Book) => string | undefined) {
-  const groups = new Map<string, Book[]>();
-
-  books.forEach((book) => {
-    addBookToGroup(groups, getValue(book) ?? UNCATEGORIZED, book);
-  });
-
-  return sortGroups(
-    Array.from(groups, ([name, groupBooks]) => ({
-      name,
-      books: sortBooksByTitle(groupBooks),
-    }))
-  );
-}
-
-function buildSeriesGroups(books: Book[], series: Series[]) {
-  const seriesById = new Map(series.map((item) => [item.id, item.name]));
-  const groups = new Map<string, Book[]>();
-
-  books.forEach((book) => {
-    if (!book.series_id) return;
-
-    const seriesName = seriesById.get(book.series_id);
-    if (!seriesName) return;
-
-    addBookToGroup(groups, seriesName, book);
-  });
-
-  return sortGroups(
-    Array.from(groups, ([name, groupBooks]) => ({
-      name,
-      books: sortBooksByVolume(groupBooks),
-    }))
-  );
+function focusedValuePath(view: LibraryValueShelf, value: string) {
+  return `/library?view=${view}&list=all&value=${encodeURIComponent(value)}`;
 }
 
 function EmptyLibraryView({ message }: { message: string }) {
@@ -329,15 +248,72 @@ function FormattedNoteContent({
 
 function LibraryShelfList({
   activeView,
+  selectedValue,
+  showFocusedShelfList,
+  expandedShelf,
+  onToggleShelf,
   counts,
   categoryCounts,
+  shelfValues,
   mobile = false,
 }: {
   activeView?: LibraryView;
+  selectedValue?: string;
+  showFocusedShelfList: boolean;
+  expandedShelf?: LibraryValueShelf;
+  onToggleShelf: (shelf: LibraryValueShelf) => void;
   counts: Partial<Record<LibraryView, number>>;
   categoryCounts: Partial<Record<LibraryView, number>>;
+  shelfValues: Partial<Record<LibraryValueShelf, ShelfValueSummary[]>>;
   mobile?: boolean;
 }) {
+  const focusedShelf = categoryShelves.find(
+    (shelf) => showFocusedShelfList && shelf.value === activeView
+  );
+
+  if (focusedShelf) {
+    const values = shelfValues[focusedShelf.value] ?? [];
+
+    return (
+      <nav className="space-y-3" aria-label={`${focusedShelf.label} values`}>
+        <Button variant="ghost" size="sm" className="justify-start px-2" asChild>
+          <Link to="/library">
+            <ChevronLeft className="mr-2 h-4 w-4" />
+            Library
+          </Link>
+        </Button>
+
+        <div className="px-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-foreground">
+            {focusedShelf.label}
+          </p>
+        </div>
+
+        <div className="space-y-1">
+          {values.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-muted-foreground">No values yet</p>
+          ) : (
+            values.map((value) => (
+              <Link
+                key={value.name}
+                to={focusedValuePath(focusedShelf.value, value.name)}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+                  selectedValue === value.name
+                    ? "bg-muted font-medium text-foreground"
+                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                )}
+              >
+                <span className="min-w-0 flex-1 truncate">{value.name}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{value.count}</span>
+              </Link>
+            ))
+          )}
+        </div>
+      </nav>
+    );
+  }
+
   return (
     <nav className="space-y-4" aria-label="Library views">
       <div className="space-y-1">
@@ -385,29 +361,72 @@ function LibraryShelfList({
         {categoryShelves.map((shelf) => {
           const active = activeView === shelf.value;
           const count = categoryCounts[shelf.value];
+          const expanded = expandedShelf === shelf.value;
+          const values = shelfValues[shelf.value] ?? [];
+          const previewValues = values.slice(0, SHELF_VALUE_PREVIEW_LIMIT);
+          const hiddenValueCount = Math.max(values.length - SHELF_VALUE_PREVIEW_LIMIT, 0);
+          const showingFullShelf = showFocusedShelfList && active && !selectedValue;
 
           return (
-            <Link
-              key={shelf.value}
-              to={viewPath(shelf.value)}
-              className={cn(
-                "flex items-center rounded-lg transition-colors",
-                mobile ? "gap-2 px-3 py-2 text-sm" : "px-3 py-2 text-sm",
-                active
-                  ? "bg-muted font-medium text-foreground"
-                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+            <div key={shelf.value} className="space-y-1">
+              <button
+                type="button"
+                onClick={() => onToggleShelf(shelf.value)}
+                className={cn(
+                  "flex w-full items-center rounded-lg text-left transition-colors",
+                  mobile ? "gap-2 px-3 py-2 text-sm" : "px-3 py-2 text-sm",
+                  active
+                    ? "bg-muted font-medium text-foreground"
+                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                )}
+                aria-expanded={expanded}
+              >
+                <span className={cn("min-w-0", !mobile && "flex-1")}>{shelf.label}</span>
+                {count !== undefined && (
+                  <span className={cn("text-muted-foreground", mobile ? "text-sm" : "text-xs")}>
+                    {count}
+                  </span>
+                )}
+                {expanded ? (
+                  <ChevronDown className="ml-auto h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                ) : (
+                  <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                )}
+              </button>
+
+              {expanded && (
+                <div className="space-y-1 pl-4">
+                  {previewValues.length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-muted-foreground">No values yet</p>
+                  ) : (
+                    previewValues.map((value) => {
+                      const valueActive = active && selectedValue === value.name;
+
+                      return (
+                        <Link
+                          key={value.name}
+                          to={valuePath(shelf.value, value.name)}
+                          className={cn(
+                            "flex items-center gap-2 rounded-md px-3 py-1.5 text-xs transition-colors",
+                            valueActive
+                              ? "bg-muted font-medium text-foreground"
+                              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                          )}
+                        >
+                          <span className="min-w-0 flex-1 truncate">{value.name}</span>
+                          <span className="shrink-0 text-muted-foreground">{value.count}</span>
+                        </Link>
+                      );
+                    })
+                  )}
+                  {hiddenValueCount > 0 && !showingFullShelf && (
+                    <Button variant="ghost" size="sm" className="h-8 w-full justify-start px-3 text-xs" asChild>
+                      <Link to={valueListPath(shelf.value)}>View all</Link>
+                    </Button>
+                  )}
+                </div>
               )}
-            >
-              <span className={cn("min-w-0", !mobile && "flex-1")}>{shelf.label}</span>
-              {count !== undefined && (
-                <span className={cn("text-muted-foreground", mobile ? "text-sm" : "text-xs")}>
-                  {count}
-                </span>
-              )}
-              {mobile && (
-                <ChevronRight className="ml-auto h-5 w-5 text-muted-foreground" aria-hidden="true" />
-              )}
-            </Link>
+            </div>
           );
         })}
       </div>
@@ -566,16 +585,26 @@ export default function Library() {
   const [notesLoading, setNotesLoading] = useState(false);
   const [notesLoaded, setNotesLoaded] = useState(false);
   const [notesError, setNotesError] = useState<string | null>(null);
+  const [expandedShelf, setExpandedShelf] = useState<LibraryValueShelf | undefined>();
+  const mobileShelfListRef = useRef<HTMLDivElement>(null);
+  const desktopShelfListRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const viewParam = searchParams.get("view");
+  const listParam = searchParams.get("list");
+  const valueParam = searchParams.get("value")?.trim() || undefined;
   const hasExplicitView = isLibraryView(viewParam);
   const activeView = hasExplicitView ? viewParam : undefined;
   const contentView = activeView ?? "all";
   const isNotesView = contentView === "notes";
+  const activeCategoryShelf = categoryShelves.find((shelf) => shelf.value === contentView);
+  const activeValueShelf = activeCategoryShelf?.value;
+  const selectedValue = activeValueShelf ? valueParam : undefined;
+  const showFocusedShelfList = Boolean(activeValueShelf && listParam === "all");
+  const shouldLoadNotes = isNotesView || expandedShelf === "notes";
   const loading = booksLoading || seriesLoading || (isNotesView && notesLoading);
-  const mobileHeading = activeView ? getViewLabel(activeView) : "Library";
+  const contentHeading = getViewLabel(contentView);
 
   useEffect(() => {
     if (viewParam && !isLibraryView(viewParam)) {
@@ -584,7 +613,30 @@ export default function Library() {
   }, [navigate, viewParam]);
 
   useEffect(() => {
-    if (!isNotesView || notesLoaded) return;
+    if (activeValueShelf && selectedValue) {
+      setExpandedShelf(activeValueShelf);
+    }
+  }, [activeValueShelf, selectedValue]);
+
+  useEffect(() => {
+    function closeOnOutsideClick(event: MouseEvent) {
+      if (selectedValue) return;
+      const clickTarget = event.target as Node;
+      const clickedInsideShelfList =
+        mobileShelfListRef.current?.contains(clickTarget) ||
+        desktopShelfListRef.current?.contains(clickTarget);
+
+      if (!clickedInsideShelfList) {
+        setExpandedShelf(undefined);
+      }
+    }
+
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, [selectedValue]);
+
+  useEffect(() => {
+    if (!shouldLoadNotes || notesLoaded) return;
 
     let isMounted = true;
     setNotesLoading(true);
@@ -608,7 +660,7 @@ export default function Library() {
     return () => {
       isMounted = false;
     };
-  }, [isNotesView, notesLoaded]);
+  }, [notesLoaded, shouldLoadNotes]);
 
   function openBook(book: Book) {
     navigate(`/books/${book.id}`);
@@ -617,6 +669,11 @@ export default function Library() {
   function retryNotes() {
     setNotesLoaded(false);
     setNotesError(null);
+  }
+
+  function toggleShelf(shelf: LibraryValueShelf) {
+    setExpandedShelf((currentShelf) => (currentShelf === shelf ? undefined : shelf));
+    navigate(viewPath(shelf));
   }
 
   const primaryCounts = useMemo(
@@ -636,9 +693,30 @@ export default function Library() {
       series: series.filter((item) => books.some((book) => book.series_id === item.id)).length,
       authors: countUniqueBookValues(books, (book) => book.authors),
       genres: countUniqueBookValues(books, (book) => book.genres),
+      rating: buildRatingGroups(books).length,
       notes: notesLoaded ? notes.length : undefined,
+      languages: new Set(books.map((book) => book.language).filter(Boolean)).size,
+      format: new Set(books.map((book) => book.format).filter(Boolean)).size,
+      "belongs-to": new Set(books.map((book) => book.belongs_to).filter(Boolean)).size,
     }),
     [books, notes.length, notesLoaded, series]
+  );
+
+  const shelfValues = useMemo(
+    () =>
+      categoryShelves.reduce(
+        (values, shelf) => ({
+          ...values,
+          [shelf.value]: buildShelfValueSummaries({
+            shelf: shelf.value,
+            books,
+            series,
+            notes,
+          }),
+        }),
+        {} as Partial<Record<LibraryValueShelf, ShelfValueSummary[]>>
+      ),
+    [books, notes, series]
   );
 
   const activePrimaryShelf = primaryShelves.find((shelf) => shelf.value === contentView);
@@ -646,6 +724,16 @@ export default function Library() {
     if (!activePrimaryShelf) return [];
     return sortBooksByTitle(books.filter(activePrimaryShelf.matches));
   }, [activePrimaryShelf, books]);
+
+  const filteredBooks = useMemo(() => {
+    if (!activeValueShelf || !selectedValue || activeValueShelf === "notes") return [];
+    return filterBooksByShelfValue({
+      shelf: activeValueShelf,
+      value: selectedValue,
+      books,
+      series,
+    });
+  }, [activeValueShelf, books, selectedValue, series]);
 
   const groupedBooks = useMemo(() => {
     if (contentView === "series") return buildSeriesGroups(books, series);
@@ -661,12 +749,23 @@ export default function Library() {
   }, [contentView, books, series]);
 
   const groupedNotes = useMemo(() => {
+    if (isNotesView && selectedValue) {
+      return filterNotesByShelfValue({
+        value: selectedValue,
+        notes,
+        books,
+      });
+    }
     if (!isNotesView) return [];
     return buildNoteGroups(notes, books);
-  }, [books, isNotesView, notes]);
+  }, [books, isNotesView, notes, selectedValue]);
 
   const displayedCountLabel = (() => {
     if (activePrimaryShelf) return itemCountLabel(visibleBooks.length, "book");
+    if (selectedValue && activeValueShelf === "notes") {
+      return itemCountLabel(groupedNotes.reduce((count, group) => count + group.notes.length, 0), "entry", "entries");
+    }
+    if (selectedValue) return itemCountLabel(filteredBooks.length, "book");
     if (contentView === "series") return itemCountLabel(categoryCounts.series ?? 0, "series", "series");
     if (contentView === "authors") return itemCountLabel(categoryCounts.authors ?? 0, "author");
     if (contentView === "genres") return itemCountLabel(categoryCounts.genres ?? 0, "genre");
@@ -679,8 +778,7 @@ export default function Library() {
     <div className="space-y-4 md:flex md:h-[calc(100svh-6.5rem)] md:min-h-0 md:flex-col">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-heading leading-snug font-medium">
-          <span className="md:hidden">{mobileHeading}</span>
-          <span className="hidden md:inline">Library</span>
+          Library
         </h1>
         <span className="text-sm text-muted-foreground">
           {loading ? "..." : displayedCountLabel}
@@ -708,13 +806,20 @@ export default function Library() {
       )}
 
       <div className="md:hidden">
-        {!hasExplicitView ? (
-          <LibraryShelfList
-            activeView={activeView}
-            counts={primaryCounts}
-            categoryCounts={categoryCounts}
-            mobile
-          />
+        {!hasExplicitView || showFocusedShelfList ? (
+          <div ref={mobileShelfListRef}>
+            <LibraryShelfList
+              activeView={activeView}
+              selectedValue={selectedValue}
+              showFocusedShelfList={showFocusedShelfList}
+              expandedShelf={expandedShelf}
+              onToggleShelf={toggleShelf}
+              counts={primaryCounts}
+              categoryCounts={categoryCounts}
+              shelfValues={shelfValues}
+              mobile
+            />
+          </div>
         ) : (
           <Button variant="ghost" size="sm" asChild>
             <Link to="/library">
@@ -732,14 +837,26 @@ export default function Library() {
         )}
       >
         <aside className="hidden md:block md:min-h-0 md:overflow-y-auto md:pr-1">
-          <LibraryShelfList
-            activeView={activeView}
-            counts={primaryCounts}
-            categoryCounts={categoryCounts}
-          />
+          <div ref={desktopShelfListRef}>
+            <LibraryShelfList
+              activeView={activeView}
+              selectedValue={selectedValue}
+              showFocusedShelfList={showFocusedShelfList}
+              expandedShelf={expandedShelf}
+              onToggleShelf={toggleShelf}
+              counts={primaryCounts}
+              categoryCounts={categoryCounts}
+              shelfValues={shelfValues}
+            />
+          </div>
         </aside>
 
         <section className="min-w-0 md:min-h-0 md:overflow-y-auto md:pr-1">
+          {!selectedValue && (
+            <h2 className="mb-6 text-xl font-heading font-medium leading-snug text-muted-foreground">
+              {contentHeading}
+            </h2>
+          )}
           {loading ? (
             <LoadingGrid />
           ) : activePrimaryShelf ? (
@@ -747,6 +864,15 @@ export default function Library() {
               <EmptyLibraryView message={activePrimaryShelf.emptyMessage} />
             ) : (
               <BooksGrid books={visibleBooks} onBook={openBook} />
+            )
+          ) : selectedValue && activeValueShelf && activeValueShelf !== "notes" ? (
+            filteredBooks.length === 0 ? (
+              <EmptyLibraryView message={`No books found for ${selectedValue}.`} />
+            ) : (
+              <GroupedBooksView
+                groups={[{ name: selectedValue, books: filteredBooks }]}
+                onBook={openBook}
+              />
             )
           ) : isNotesView ? (
             notesError ? null : <GroupedNotesView groups={groupedNotes} onBook={openBook} />
