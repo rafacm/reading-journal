@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildNoteGroups, buildRatingGroups } from "../src/lib/libraryShelves";
-import type { Book, BookNote } from "../src/types";
+import {
+  buildNoteGroups,
+  buildRatingGroups,
+  buildShelfValueSummaries,
+  filterBooksByShelfValue,
+} from "../src/lib/libraryShelves";
+import type { Book, BookNote, Series } from "../src/types";
 
 test("groups favorite books above ratings without duplicating them", () => {
   const groups = buildRatingGroups([
@@ -61,6 +66,118 @@ test("groups notes by label and puts favorite quotes first", () => {
   );
 });
 
+test("summarizes shelf values by book count and then name", () => {
+  const books = [
+    makeBook({ id: "fantasy-a", title: "Fantasy A", genres: ["Fantasy", "Adventure"] }),
+    makeBook({ id: "fantasy-b", title: "Fantasy B", genres: ["Fantasy"] }),
+    makeBook({ id: "mystery", title: "Mystery", genres: ["Mystery"] }),
+    makeBook({ id: "adventure", title: "Adventure", genres: ["Adventure"] }),
+  ];
+
+  const summaries = buildShelfValueSummaries({
+    shelf: "genres",
+    books,
+    series: [],
+  });
+
+  assert.deepEqual(summaries, [
+    { name: "Adventure", count: 2 },
+    { name: "Fantasy", count: 2 },
+    { name: "Mystery", count: 1 },
+  ]);
+});
+
+test("summarizes duplicate values once per book", () => {
+  const summaries = buildShelfValueSummaries({
+    shelf: "authors",
+    books: [
+      makeBook({ id: "book-a", authors: ["Robin Hobb", "Robin Hobb"] }),
+      makeBook({ id: "book-b", authors: ["Robin Hobb"] }),
+    ],
+    series: [],
+  });
+
+  assert.deepEqual(summaries, [{ name: "Robin Hobb", count: 2 }]);
+});
+
+test("keeps rating shelf values in rating order instead of count order", () => {
+  const summaries = buildShelfValueSummaries({
+    shelf: "rating",
+    books: [
+      makeBook({ id: "unrated-a", title: "Unrated A", rating: null }),
+      makeBook({ id: "unrated-b", title: "Unrated B", rating: null }),
+      makeBook({ id: "unrated-c", title: "Unrated C", rating: null }),
+      makeBook({ id: "favorite", title: "Favorite", rating: 3, is_favorite: true }),
+      makeBook({ id: "five", title: "Five", rating: 5 }),
+      makeBook({ id: "four", title: "Four", rating: 4 }),
+      makeBook({ id: "two", title: "Two", rating: 2 }),
+      makeBook({ id: "one", title: "One", rating: 1 }),
+    ],
+    series: [],
+  });
+
+  assert.deepEqual(summaries, [
+    { name: "Favorites", count: 1 },
+    { name: "5 Stars", count: 1 },
+    { name: "4 Stars", count: 1 },
+    { name: "2 Stars", count: 1 },
+    { name: "1 Star", count: 1 },
+    { name: "Unrated", count: 3 },
+  ]);
+});
+
+test("filters books by selected multi-value shelf value", () => {
+  const books = [
+    makeBook({ id: "fantasy", title: "Fantasy", genres: ["Fantasy", "Adventure"] }),
+    makeBook({ id: "mystery", title: "Mystery", genres: ["Mystery"] }),
+  ];
+
+  const filteredBooks = filterBooksByShelfValue({
+    shelf: "genres",
+    value: "Fantasy",
+    books,
+    series: [],
+  });
+
+  assert.deepEqual(filteredBooks.map((book) => book.id), ["fantasy"]);
+});
+
+test("filters books by selected single-value shelf value", () => {
+  const books = [
+    makeBook({ id: "paperback", title: "Paperback", format: "Paperback" }),
+    makeBook({ id: "ebook", title: "Ebook", format: "eBook" }),
+  ];
+
+  const filteredBooks = filterBooksByShelfValue({
+    shelf: "format",
+    value: "Paperback",
+    books,
+    series: [],
+  });
+
+  assert.deepEqual(filteredBooks.map((book) => book.id), ["paperback"]);
+});
+
+test("filters books by selected series name", () => {
+  const series: Series[] = [
+    makeSeries({ id: "series-1", name: "Realm of the Elderlings" }),
+    makeSeries({ id: "series-2", name: "Discworld" }),
+  ];
+  const books = [
+    makeBook({ id: "assassin", title: "Assassin's Apprentice", series_id: "series-1" }),
+    makeBook({ id: "guards", title: "Guards! Guards!", series_id: "series-2" }),
+  ];
+
+  const filteredBooks = filterBooksByShelfValue({
+    shelf: "series",
+    value: "Realm of the Elderlings",
+    books,
+    series,
+  });
+
+  assert.deepEqual(filteredBooks.map((book) => book.id), ["assassin"]);
+});
+
 function makeBook(overrides: Partial<Book>): Book {
   return {
     id: "book-1",
@@ -69,6 +186,16 @@ function makeBook(overrides: Partial<Book>): Book {
     status: "Finished",
     rating: null,
     is_favorite: false,
+    user_id: "user-1",
+    created_at: "2026-05-01T08:00:00Z",
+    ...overrides,
+  };
+}
+
+function makeSeries(overrides: Partial<Series>): Series {
+  return {
+    id: "series-1",
+    name: "Series",
     user_id: "user-1",
     created_at: "2026-05-01T08:00:00Z",
     ...overrides,
