@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { BookOpen, Check, SlidersHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -7,13 +7,17 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useBooksContext } from "@/context/BooksContext";
 import { useSeries } from "@/hooks/useSeries";
+import { fetchAllBookNotes, formatBookNotePageRange } from "@/lib/bookNotes";
 import {
   BOOK_SEARCH_PROPERTIES,
+  getSearchHighlightParts,
+  searchBookNotes,
   searchBooks,
   type BookSearchPropertyKey,
+  type BookNoteSearchMatch,
 } from "@/lib/bookSearch";
 import { cn, statusVariant } from "@/lib/utils";
-import type { Book } from "@/types";
+import type { Book, BookNote, BookNoteLabel } from "@/types";
 
 const allPropertyKeys = BOOK_SEARCH_PROPERTIES.map((property) => property.key);
 
@@ -25,7 +29,12 @@ export default function Search() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedProperties, setSelectedProperties] =
     useState<BookSearchPropertyKey[]>(allPropertyKeys);
+  const [notes, setNotes] = useState<BookNote[]>([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [notesLoaded, setNotesLoaded] = useState(false);
+  const [notesError, setNotesError] = useState<string | null>(null);
   const filterRef = useRef<HTMLDivElement>(null);
+  const hasQuery = query.trim().length > 0;
 
   const sections = useMemo(
     () =>
@@ -36,8 +45,13 @@ export default function Search() {
     [books, query, selectedProperties, series]
   );
 
-  const hasQuery = query.trim().length > 0;
+  const noteMatches = useMemo(
+    () => searchBookNotes(notes, books, query),
+    [books, notes, query]
+  );
+
   const allPropertiesSelected = selectedProperties.length === allPropertyKeys.length;
+  const hasResults = sections.length > 0 || noteMatches.length > 0;
 
   useEffect(() => {
     if (!filtersOpen) return;
@@ -53,6 +67,35 @@ export default function Search() {
       document.removeEventListener("pointerdown", handlePointerDown);
     };
   }, [filtersOpen]);
+
+  useEffect(() => {
+    if (!hasQuery || notesLoaded) return;
+
+    let isMounted = true;
+    setNotesLoading(true);
+    setNotesError(null);
+
+    fetchAllBookNotes()
+      .then((data) => {
+        if (!isMounted) return;
+        setNotes(data);
+        setNotesLoaded(true);
+      })
+      .catch((fetchError: unknown) => {
+        if (!isMounted) return;
+        setNotesLoaded(true);
+        setNotesError(
+          fetchError instanceof Error ? fetchError.message : "Could not load notes."
+        );
+      })
+      .finally(() => {
+        if (isMounted) setNotesLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [hasQuery, notesLoaded]);
 
   function openBook(book: Book) {
     navigate(`/books/${book.id}`);
@@ -92,8 +135,8 @@ export default function Search() {
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search books"
-            aria-label="Search books"
+            placeholder="Search books and notes"
+            aria-label="Search books and notes"
             autoComplete="off"
             className="h-10"
           />
@@ -168,13 +211,18 @@ export default function Search() {
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
+      {notesError && hasQuery && (
+        <p className="text-sm text-destructive">
+          Notes could not be searched: {notesError}
+        </p>
+      )}
 
       {!loading && !error && !hasQuery && (
         <EmptyState message="Enter a search term to search your library." />
       )}
 
-      {!loading && !error && hasQuery && sections.length === 0 && (
-        <EmptyState message="No matching books found." />
+      {!loading && !error && hasQuery && !notesLoading && !hasResults && (
+        <EmptyState message="No matching books or notes found." />
       )}
 
       {sections.map((section) => (
@@ -200,16 +248,21 @@ export default function Search() {
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex min-w-0 items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{match.book.title}</p>
+                      <p className="truncate text-sm font-medium">
+                        <HighlightedText value={match.book.title} query={query} />
+                      </p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {match.book.authors.join(", ")}
+                        <HighlightedText
+                          value={match.book.authors.join(", ")}
+                          query={query}
+                        />
                       </p>
                     </div>
                     <Badge
                       variant={statusVariant(match.book.status)}
                       className="hidden sm:inline-flex"
                     >
-                      {match.book.status}
+                      <HighlightedText value={match.book.status} query={query} />
                     </Badge>
                   </div>
                   {!["title", "authors", "status"].includes(section.property.key) && (
@@ -220,7 +273,7 @@ export default function Search() {
                           variant="outline"
                           className="max-w-full truncate"
                         >
-                          {value}
+                          <HighlightedText value={value} query={query} />
                         </Badge>
                       ))}
                     </div>
@@ -231,8 +284,159 @@ export default function Search() {
           </div>
         </section>
       ))}
+
+      {hasQuery && (notesLoading || noteMatches.length > 0) && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="font-heading leading-snug font-medium">Notes</h2>
+            <p className="text-xs text-muted-foreground">
+              {notesLoading
+                ? "Searching notes..."
+                : `${noteMatches.length} match${noteMatches.length !== 1 ? "es" : ""}`}
+            </p>
+          </div>
+          <Separator />
+          {!notesLoading && (
+            <div className="space-y-2">
+              {noteMatches.map((match) => (
+                <NoteSearchResult
+                  key={match.note.id}
+                  match={match}
+                  query={query}
+                  onBook={openBook}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
+}
+
+function NoteSearchResult({
+  match,
+  query,
+  onBook,
+}: {
+  match: BookNoteSearchMatch;
+  query: string;
+  onBook: (book: Book) => void;
+}) {
+  const { note, book } = match;
+  const pageLabel = formatBookNotePageRange(note);
+  const visibleDate = note.note_date ?? note.created_at;
+
+  return (
+    <button
+      type="button"
+      className="block w-full rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      onClick={() => onBook(book)}
+    >
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">
+            <HighlightedText value={book.title} query={query} />
+          </p>
+          <p className="truncate text-xs text-muted-foreground">
+            <HighlightedText value={book.authors.join(", ")} query={query} />
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          <Badge variant="outline">{noteLabelText(note.label)}</Badge>
+          <span className="text-xs text-muted-foreground">
+            {formatNoteDate(visibleDate)}
+          </span>
+        </div>
+      </div>
+
+      {note.label === "quote" ? (
+        <div className="grid grid-cols-[3rem_1fr] gap-x-4">
+          <div className="flex flex-col items-center">
+            <div
+              aria-hidden="true"
+              className="font-serif text-5xl leading-none text-sky-600 dark:text-sky-400"
+            >
+              “
+            </div>
+            <div className="-mt-3 w-px flex-1 bg-sky-500 dark:bg-sky-400" />
+          </div>
+          <div className="min-w-0">
+            <p className="line-clamp-3 whitespace-pre-line font-serif text-sm italic leading-6 text-foreground">
+              <HighlightedText value={match.values[0]} query={query} />
+            </p>
+            {(note.quote_speaker || pageLabel) && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {note.quote_speaker && (
+                  <span className="font-serif text-sm italic text-muted-foreground">
+                    - {note.quote_speaker}
+                  </span>
+                )}
+                {pageLabel && (
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {pageLabel}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
+          {note.title && (
+            <p className="mb-1 text-sm font-medium leading-snug">
+              <HighlightedText value={note.title} query={query} />
+            </p>
+          )}
+          <p className="line-clamp-3 whitespace-pre-line text-sm leading-6 text-foreground">
+            <HighlightedText value={match.values[0]} query={query} />
+          </p>
+          {pageLabel && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground">
+              <span>{pageLabel}</span>
+            </div>
+          )}
+        </>
+      )}
+    </button>
+  );
+}
+
+function HighlightedText({
+  value,
+  query,
+}: {
+  value: string;
+  query: string;
+}): ReactNode {
+  return getSearchHighlightParts(value, query).map((part, index) =>
+    part.highlighted ? (
+      <mark
+        key={index}
+        className="rounded-sm bg-yellow-200 px-0.5 text-inherit dark:bg-yellow-500/40"
+      >
+        {part.text}
+      </mark>
+    ) : (
+      <span key={index}>{part.text}</span>
+    ),
+  );
+}
+
+function noteLabelText(label: BookNoteLabel): string {
+  if (label === "quote") return "Quote";
+  if (label === "review") return "Review";
+  return "Note";
+}
+
+function formatNoteDate(value: string): string {
+  const dateValue = value.length === 10 ? `${value}T00:00:00` : value;
+
+  return new Date(dateValue).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function BookCover({ book }: { book: Book }) {
