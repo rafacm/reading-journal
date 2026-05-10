@@ -192,9 +192,14 @@ export default function BookDetails() {
 
   async function handleRating(rating: number) {
     if (!book) return;
+    const previous = localRating;
     const next = localRating === rating ? null : rating;
     setLocalRating(next);
-    await updateBook(book.id, { rating: next });
+    try {
+      await updateBook(book.id, { rating: next });
+    } catch {
+      setLocalRating(previous);
+    }
   }
 
   async function handleCoverChange(event: ChangeEvent<HTMLInputElement>) {
