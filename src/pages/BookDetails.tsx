@@ -7,6 +7,7 @@ import {
   ExternalLink,
   Heart,
   ImagePlus,
+  Info,
   RefreshCw,
   Star,
 } from "lucide-react";
@@ -119,6 +120,7 @@ export default function BookDetails() {
 
   const [isFavorite, setIsFavorite] = useState(false);
   const [localRating, setLocalRating] = useState<number | null>(null);
+  const [showRatingGuide, setShowRatingGuide] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isProgressDialogOpen, setIsProgressDialogOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -436,6 +438,56 @@ export default function BookDetails() {
                   />
                 </button>
               ))}
+              <div className="relative ml-2 flex items-center">
+                <button
+                  type="button"
+                  aria-label="Show rating guide"
+                  aria-expanded={showRatingGuide}
+                  aria-describedby={showRatingGuide ? "rating-guide-tooltip" : undefined}
+                  onClick={() => setShowRatingGuide((current) => !current)}
+                  onMouseEnter={() => setShowRatingGuide(true)}
+                  onMouseLeave={() => setShowRatingGuide(false)}
+                  onFocus={() => setShowRatingGuide(true)}
+                  onBlur={() => setShowRatingGuide(false)}
+                  className="rounded-full p-0.5 text-muted-foreground/65 transition-colors hover:bg-muted/60 hover:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </button>
+                {showRatingGuide && (
+                  <div
+                    id="rating-guide-tooltip"
+                    role="tooltip"
+                    className="absolute top-full right-0 z-20 mt-2 w-72 rounded-lg border border-border/70 bg-popover p-3 text-xs text-muted-foreground/75 shadow-sm sm:left-1/2 sm:right-auto sm:-translate-x-1/2"
+                  >
+                    <div className="space-y-1.5">
+                      <p className="flex gap-2">
+                        <span className="shrink-0 text-muted-foreground/70">♥︎</span>
+                        <span>Loved it so much!! One of the best books I’ve ever read</span>
+                      </p>
+                      <p className="flex gap-2">
+                        <span className="shrink-0 text-muted-foreground/70">★★★★★</span>
+                        <span>Loved it! Will recommend</span>
+                      </p>
+                      <p className="flex gap-2">
+                        <span className="shrink-0 text-muted-foreground/70">★★★★☆</span>
+                        <span>Really enjoyed it</span>
+                      </p>
+                      <p className="flex gap-2">
+                        <span className="shrink-0 text-muted-foreground/70">★★★☆☆</span>
+                        <span>Liked it, but didn’t wow me</span>
+                      </p>
+                      <p className="flex gap-2">
+                        <span className="shrink-0 text-muted-foreground/70">★★☆☆☆</span>
+                        <span>Meh. Had issues</span>
+                      </p>
+                      <p className="flex gap-2">
+                        <span className="shrink-0 text-muted-foreground/70">★☆☆☆☆</span>
+                        <span>Not for me</span>
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
