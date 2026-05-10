@@ -462,11 +462,11 @@ export default function BookDetails() {
                     <div className="space-y-1.5">
                       <p className="flex gap-2">
                         <span className="shrink-0 text-muted-foreground/70">♥︎</span>
-                        <span>Loved it so much!! One of the best books I’ve ever read</span>
+                        <span>One of the best books I’ve ever read</span>
                       </p>
                       <p className="flex gap-2">
                         <span className="shrink-0 text-muted-foreground/70">★★★★★</span>
-                        <span>Loved it! Will recommend</span>
+                        <span>Loved it</span>
                       </p>
                       <p className="flex gap-2">
                         <span className="shrink-0 text-muted-foreground/70">★★★★☆</span>
@@ -478,7 +478,7 @@ export default function BookDetails() {
                       </p>
                       <p className="flex gap-2">
                         <span className="shrink-0 text-muted-foreground/70">★★☆☆☆</span>
-                        <span>Meh. Had issues</span>
+                        <span>Meh, had issues</span>
                       </p>
                       <p className="flex gap-2">
                         <span className="shrink-0 text-muted-foreground/70">★☆☆☆☆</span>
