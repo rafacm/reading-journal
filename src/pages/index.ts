@@ -4,3 +4,4 @@ export { default as Library } from "./Library";
 export { default as Search } from "./Search";
 export { default as Analytics } from "./Analytics";
 export { default as BookDetails } from "./BookDetails";
+export { default as Shelves } from "./Shelves";

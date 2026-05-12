@@ -12,6 +12,7 @@ const BookDetails = lazy(() => import("@/pages/BookDetails"));
 const Groups = lazy(() => import("@/pages/Groups"));
 const Profile = lazy(() => import("@/pages/Profile"));
 const Settings = lazy(() => import("@/pages/Settings"));
+const Shelves = lazy(() => import("@/pages/Shelves"));
 
 function lazyRoute(element: ReactNode) {
   return <Suspense fallback={null}>{element}</Suspense>;
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
           { path: "/search", element: lazyRoute(<Search />) },
           { path: "/books/:bookId", element: lazyRoute(<BookDetails />) },
           { path: "/analytics", element: lazyRoute(<Analytics />) },
+          { path: "/shelves", element: lazyRoute(<Shelves />) },
           { path: "/account", element: <Navigate to="/settings/profile" replace /> },
           { path: "/groups", element: lazyRoute(<Groups />) },
           { path: "/profile", element: lazyRoute(<Profile />) },
