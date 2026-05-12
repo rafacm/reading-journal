@@ -1,7 +1,35 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { BookOpen, ChevronDown, ChevronLeft, ChevronRight, Heart, RefreshCw } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import {
+  BookOpen,
+  Filter,
+  Grid2X2,
+  Heart,
+  List,
+  RefreshCw,
+  Search,
+  Star,
+  X,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useBooksContext } from "@/context/BooksContext";
 import { useSeries } from "@/hooks/useSeries";
@@ -16,21 +44,17 @@ import {
   buildNoteGroups,
   buildRatingGroups,
   buildSeriesGroups,
-  buildShelfValueSummaries,
   buildSingleValueGroups,
-  countUniqueBookValues,
   filterBooksByShelfValue,
   filterNotesByShelfValue,
-  sortBooksByTitle,
   type BookGroup,
   type LibraryValueShelf,
   type LibraryNote,
   type NoteGroup,
-  type ShelfValueSummary,
 } from "@/lib/libraryShelves";
-import { cn } from "@/lib/utils";
+import { cn, statusVariant } from "@/lib/utils";
 import BookCard from "@/components/BookCard";
-import type { Book, BookNote } from "@/types";
+import type { Book, BookNote, Series } from "@/types";
 
 type LibraryView =
   | "all"
@@ -60,8 +84,49 @@ type CategoryShelf = {
   label: string;
 };
 
-const SHELF_VALUE_PREVIEW_LIMIT = 10;
+type LibrarySort = "title" | "newest" | "rating" | "progress";
 
+type LibraryDisplay = "grid" | "compact";
+
+type LibraryFilterKey =
+  | "genre"
+  | "rating"
+  | "year"
+  | "format"
+  | "language"
+  | "belongsTo";
+
+type LibraryFilters = Record<LibraryFilterKey, string>;
+
+type LibraryFilterOptions = Record<LibraryFilterKey, string[]>;
+
+type ActiveFilterChip = {
+  keys: LibraryFilterKey[];
+  label: string;
+};
+
+const filterKeys: LibraryFilterKey[] = [
+  "genre",
+  "rating",
+  "year",
+  "format",
+  "language",
+  "belongsTo",
+];
+
+const filterLabels: Record<LibraryFilterKey, string> = {
+  genre: "Genre",
+  rating: "Rating",
+  year: "Year",
+  format: "Format",
+  language: "Language",
+  belongsTo: "Belongs to",
+};
+
+const allFilterValue = "__all__";
+
+const validSorts = new Set<LibrarySort>(["title", "newest", "rating", "progress"]);
+const validDisplays = new Set<LibraryDisplay>(["grid", "compact"]);
 const primaryShelves: PrimaryShelf[] = [
   {
     value: "all",
@@ -121,20 +186,12 @@ function isLibraryView(value: string | null): value is LibraryView {
   return value !== null && validViews.has(value as LibraryView);
 }
 
-function viewPath(view: LibraryView) {
-  return `/library?view=${view}`;
+function isLibrarySort(value: string | null): value is LibrarySort {
+  return value !== null && validSorts.has(value as LibrarySort);
 }
 
-function valueListPath(view: LibraryValueShelf) {
-  return `/library?view=${view}&list=all`;
-}
-
-function valuePath(view: LibraryValueShelf, value: string) {
-  return `/library?view=${view}&value=${encodeURIComponent(value)}`;
-}
-
-function focusedValuePath(view: LibraryValueShelf, value: string) {
-  return `/library?view=${view}&list=all&value=${encodeURIComponent(value)}`;
+function isLibraryDisplay(value: string | null): value is LibraryDisplay {
+  return value !== null && validDisplays.has(value as LibraryDisplay);
 }
 
 function EmptyLibraryView({ message }: { message: string }) {
@@ -149,7 +206,7 @@ function EmptyLibraryView({ message }: { message: string }) {
 function BooksGrid({ books, onBook }: { books: Book[]; onBook: (b: Book) => void }) {
   if (books.length === 0) return null;
   return (
-    <div className="grid grid-cols-3 gap-2.5 md:grid-cols-4 lg:gap-3">
+    <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
       {books.map((book) => (
         <BookCard key={book.id} book={book} onClick={onBook} textSize="compact" />
       ))}
@@ -159,12 +216,106 @@ function BooksGrid({ books, onBook }: { books: Book[]; onBook: (b: Book) => void
 
 function LoadingGrid() {
   return (
-    <div className="grid grid-cols-3 gap-2.5 md:grid-cols-4 lg:gap-3">
+    <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
       {Array.from({ length: 8 }).map((_, i) => (
         <div key={i} className="aspect-[2/3] animate-pulse rounded-xl bg-muted" />
       ))}
     </div>
   );
+}
+
+function CompactBookRow({ book, onBook }: { book: Book; onBook: (b: Book) => void }) {
+  const progress = getBookProgress(book);
+  const hasProgress = book.status === "Reading" && book.total_pages && book.total_pages > 0;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onBook(book)}
+      className="grid w-full grid-cols-[3rem_minmax(0,1fr)] gap-3 rounded-lg border bg-background p-2 text-left transition-colors hover:bg-muted/50 dark:bg-card sm:grid-cols-[3.5rem_minmax(0,1fr)_auto]"
+    >
+      <div className="aspect-[2/3] overflow-hidden rounded-md bg-muted">
+        {book.cover_url ? (
+          <img
+            src={book.cover_url}
+            alt={book.title}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <BookOpen className="h-5 w-5 text-muted-foreground/40" />
+          </div>
+        )}
+      </div>
+
+      <div className="min-w-0 space-y-1">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium leading-snug">{book.title}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {book.authors.join(", ")}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={statusVariant(book.status)} className="text-[10px]">
+            {book.status}
+          </Badge>
+          {book.rating ? (
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <Star className="h-3 w-3 fill-current" />
+              {book.rating}
+            </span>
+          ) : null}
+          {book.is_favorite && (
+            <Heart className="h-3.5 w-3.5 fill-rose-500 text-rose-500" aria-label="Favorite" />
+          )}
+        </div>
+        {hasProgress && (
+          <div className="flex items-center gap-2 pt-1">
+            <Progress value={progress} className="h-1.5 flex-1" />
+            <span className="text-xs text-muted-foreground">{progress}%</span>
+          </div>
+        )}
+      </div>
+
+      <div className="hidden min-w-24 text-right text-xs text-muted-foreground sm:block">
+        {book.current_page && book.total_pages ? (
+          <span>
+            {book.current_page} / {book.total_pages} pages
+          </span>
+        ) : (
+          <span>{book.format ?? book.language ?? ""}</span>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function CompactBooksList({ books, onBook }: { books: Book[]; onBook: (b: Book) => void }) {
+  if (books.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      {books.map((book) => (
+        <CompactBookRow key={book.id} book={book} onBook={onBook} />
+      ))}
+    </div>
+  );
+}
+
+function BooksView({
+  books,
+  display,
+  onBook,
+}: {
+  books: Book[];
+  display: LibraryDisplay;
+  onBook: (b: Book) => void;
+}) {
+  if (display === "compact") {
+    return <CompactBooksList books={books} onBook={onBook} />;
+  }
+
+  return <BooksGrid books={books} onBook={onBook} />;
 }
 
 function groupCountLabel(count: number) {
@@ -173,6 +324,178 @@ function groupCountLabel(count: number) {
 
 function itemCountLabel(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function normalizeSearchText(value: string): string {
+  return value.trim().toLocaleLowerCase();
+}
+
+function uniqueSortedValues(values: Array<string | undefined | null>): string[] {
+  return Array.from(
+    new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value))),
+  ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base", numeric: true }));
+}
+
+function getBookFilterDate(book: Book): string | undefined {
+  return book.date_finished ?? book.date_started ?? book.created_at;
+}
+
+function getBookFilterDateParts(book: Book): { year?: string; month?: string } {
+  const value = getBookFilterDate(book);
+  if (!value) return {};
+
+  const [datePart] = value.split("T");
+  const [year, month] = datePart.split("-");
+
+  if (!year || !month) return {};
+  return { year, month };
+}
+
+function getLibraryFilters(searchParams: URLSearchParams): LibraryFilters {
+  return {
+    genre: searchParams.get("genre")?.trim() ?? "",
+    rating: searchParams.get("rating")?.trim() ?? "",
+    year: searchParams.get("year")?.trim() ?? "",
+    format: searchParams.get("format")?.trim() ?? "",
+    language: searchParams.get("language")?.trim() ?? "",
+    belongsTo: searchParams.get("belongsTo")?.trim() ?? "",
+  };
+}
+
+function hasActiveLibraryFilters(filters: LibraryFilters): boolean {
+  return filterKeys.some((key) => Boolean(filters[key]));
+}
+
+function buildLibraryFilterOptions(books: Book[]): LibraryFilterOptions {
+  const years = new Set<string>();
+
+  books.forEach((book) => {
+    const { year } = getBookFilterDateParts(book);
+    if (year) years.add(year);
+  });
+
+  return {
+    genre: uniqueSortedValues(books.flatMap((book) => book.genres ?? [])),
+    rating: uniqueSortedValues(books.map((book) => book.rating?.toString())),
+    year: Array.from(years).sort((a, b) => Number(b) - Number(a)),
+    format: uniqueSortedValues(books.map((book) => book.format)),
+    language: uniqueSortedValues(books.map((book) => book.language)),
+    belongsTo: uniqueSortedValues(books.map((book) => book.belongs_to)),
+  };
+}
+
+function bookMatchesLibraryFilters(book: Book, filters: LibraryFilters): boolean {
+  if (filters.genre && !(book.genres ?? []).includes(filters.genre)) return false;
+
+  if (filters.rating) {
+    const rating = Number.parseInt(filters.rating, 10);
+    if (!Number.isFinite(rating) || book.rating !== rating) return false;
+  }
+
+  if (filters.format && book.format !== filters.format) return false;
+  if (filters.language && book.language !== filters.language) return false;
+  if (filters.belongsTo && book.belongs_to !== filters.belongsTo) return false;
+
+  if (filters.year) {
+    const { year } = getBookFilterDateParts(book);
+    if (filters.year && year !== filters.year) return false;
+  }
+
+  return true;
+}
+
+function applyLibraryFilters(books: Book[], filters: LibraryFilters): Book[] {
+  if (!hasActiveLibraryFilters(filters)) return books;
+  return books.filter((book) => bookMatchesLibraryFilters(book, filters));
+}
+
+function buildActiveFilterChips(filters: LibraryFilters): ActiveFilterChip[] {
+  const chips: ActiveFilterChip[] = [];
+
+  filterKeys.forEach((key) => {
+    const value = filters[key];
+    if (!value) return;
+
+    if (key === "year") return;
+
+    chips.push({
+      keys: [key],
+      label: `${filterLabels[key]}: ${key === "rating" ? `${value}` : value}`,
+    });
+  });
+
+  if (filters.year) {
+    chips.push({
+      keys: ["year"],
+      label: `Time: ${filters.year}`,
+    });
+  }
+
+  return chips;
+}
+
+function getBookProgress(book: Book): number {
+  const currentPage = Math.max(0, book.current_page ?? 0);
+  const totalPages = Math.max(0, book.total_pages ?? 0);
+
+  if (totalPages <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round((currentPage / totalPages) * 100)));
+}
+
+function getSeriesName(book: Book, series: Series[]): string {
+  if (!book.series_id) return "";
+  return series.find((item) => item.id === book.series_id)?.name ?? "";
+}
+
+function matchesLibrarySearch(book: Book, series: Series[], query: string): boolean {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return true;
+
+  const searchableText = [
+    book.title,
+    ...book.authors,
+    ...(book.genres ?? []),
+    getSeriesName(book, series),
+  ]
+    .join(" ")
+    .toLocaleLowerCase();
+
+  return searchableText.includes(normalizedQuery);
+}
+
+function sortLibraryBooks(books: Book[], sort: LibrarySort): Book[] {
+  return [...books].sort((a, b) => {
+    if (sort === "newest") {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }
+
+    if (sort === "rating") {
+      return (b.rating ?? 0) - (a.rating ?? 0) || a.title.localeCompare(b.title);
+    }
+
+    if (sort === "progress") {
+      return getBookProgress(b) - getBookProgress(a) || a.title.localeCompare(b.title);
+    }
+
+    return a.title.localeCompare(b.title);
+  });
+}
+
+function filterAndSortBooks({
+  books,
+  series,
+  query,
+  sort,
+}: {
+  books: Book[];
+  series: Series[];
+  query: string;
+  sort: LibrarySort;
+}) {
+  return sortLibraryBooks(
+    books.filter((book) => matchesLibrarySearch(book, series, query)),
+    sort
+  );
 }
 
 function formatNoteDate(value: string): string {
@@ -246,191 +569,289 @@ function FormattedNoteContent({
   );
 }
 
-function LibraryShelfList({
-  activeView,
-  selectedValue,
-  showFocusedShelfList,
-  expandedShelf,
-  onToggleShelf,
-  counts,
-  categoryCounts,
-  shelfValues,
-  mobile = false,
+function FilterSelect({
+  label,
+  value,
+  options,
+  onChange,
+  formatOption = (option) => option,
 }: {
-  activeView?: LibraryView;
-  selectedValue?: string;
-  showFocusedShelfList: boolean;
-  expandedShelf?: LibraryValueShelf;
-  onToggleShelf: (shelf: LibraryValueShelf) => void;
-  counts: Partial<Record<LibraryView, number>>;
-  categoryCounts: Partial<Record<LibraryView, number>>;
-  shelfValues: Partial<Record<LibraryValueShelf, ShelfValueSummary[]>>;
-  mobile?: boolean;
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+  formatOption?: (option: string) => string;
 }) {
-  const focusedShelf = categoryShelves.find(
-    (shelf) => showFocusedShelfList && shelf.value === activeView
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Select
+        value={value || allFilterValue}
+        onValueChange={(nextValue) => onChange(nextValue === allFilterValue ? "" : nextValue)}
+      >
+        <SelectTrigger className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={allFilterValue}>Any</SelectItem>
+          {options.map((option) => (
+            <SelectItem key={option} value={option}>
+              {formatOption(option)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
+}
 
-  if (focusedShelf) {
-    const values = shelfValues[focusedShelf.value] ?? [];
+function LibraryFilterFields({
+  filters,
+  filterOptions,
+  onFilterChange,
+}: {
+  filters: LibraryFilters;
+  filterOptions: LibraryFilterOptions;
+  onFilterChange: (key: LibraryFilterKey, value: string) => void;
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <FilterSelect
+        label="Genre"
+        value={filters.genre}
+        options={filterOptions.genre}
+        onChange={(value) => onFilterChange("genre", value)}
+      />
+      <FilterSelect
+        label="Rating"
+        value={filters.rating}
+        options={filterOptions.rating}
+        onChange={(value) => onFilterChange("rating", value)}
+      />
+      <FilterSelect
+        label="Year"
+        value={filters.year}
+        options={filterOptions.year}
+        onChange={(value) => onFilterChange("year", value)}
+      />
+      <FilterSelect
+        label="Format"
+        value={filters.format}
+        options={filterOptions.format}
+        onChange={(value) => onFilterChange("format", value)}
+      />
+      <FilterSelect
+        label="Language"
+        value={filters.language}
+        options={filterOptions.language}
+        onChange={(value) => onFilterChange("language", value)}
+      />
+      <FilterSelect
+        label="Belongs to"
+        value={filters.belongsTo}
+        options={filterOptions.belongsTo}
+        onChange={(value) => onFilterChange("belongsTo", value)}
+      />
+    </div>
+  );
+}
 
-    return (
-      <nav className="space-y-3" aria-label={`${focusedShelf.label} values`}>
-        <Button variant="ghost" size="sm" className="justify-start px-2" asChild>
-          <Link to="/library">
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            Library
-          </Link>
-        </Button>
+function LibraryToolbar({
+  query,
+  sort,
+  display,
+  filters,
+  filterOptions,
+  activeFilterChips,
+  onQueryChange,
+  onSortChange,
+  onDisplayChange,
+  onFilterChange,
+  onRemoveFilter,
+  onClearFilters,
+}: {
+  query: string;
+  sort: LibrarySort;
+  display: LibraryDisplay;
+  filters: LibraryFilters;
+  filterOptions: LibraryFilterOptions;
+  activeFilterChips: ActiveFilterChip[];
+  onQueryChange: (query: string) => void;
+  onSortChange: (sort: LibrarySort) => void;
+  onDisplayChange: (display: LibraryDisplay) => void;
+  onFilterChange: (key: LibraryFilterKey, value: string) => void;
+  onRemoveFilter: (keys: LibraryFilterKey[]) => void;
+  onClearFilters: () => void;
+}) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const desktopFiltersRef = useRef<HTMLDivElement>(null);
+  const hasActiveFilters = activeFilterChips.length > 0;
 
-        <div className="px-2">
-          <p className="text-xs font-medium uppercase tracking-wide text-foreground">
-            {focusedShelf.label}
-          </p>
-        </div>
+  useEffect(() => {
+    if (!filtersOpen) return;
 
-        <div className="space-y-1">
-          {values.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-muted-foreground">No values yet</p>
-          ) : (
-            values.map((value) => (
-              <Link
-                key={value.name}
-                to={focusedValuePath(focusedShelf.value, value.name)}
-                className={cn(
-                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
-                  selectedValue === value.name
-                    ? "bg-muted font-medium text-foreground"
-                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                )}
-              >
-                <span className="min-w-0 flex-1 truncate">{value.name}</span>
-                <span className="shrink-0 text-xs text-muted-foreground">{value.count}</span>
-              </Link>
-            ))
-          )}
-        </div>
-      </nav>
-    );
-  }
+    function closeDesktopFiltersOnOutsideClick(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (desktopFiltersRef.current?.contains(target)) return;
+      if (target instanceof Element && target.closest("[data-slot='select-content']")) return;
+      setFiltersOpen(false);
+    }
+
+    document.addEventListener("pointerdown", closeDesktopFiltersOnOutsideClick);
+    return () => {
+      document.removeEventListener("pointerdown", closeDesktopFiltersOnOutsideClick);
+    };
+  }, [filtersOpen]);
 
   return (
-    <nav className="space-y-4" aria-label="Library views">
-      <div className="space-y-1">
-        {primaryShelves.map((shelf) => {
-          const active = activeView === shelf.value;
-
-          return (
-            <Link
-              key={shelf.value}
-              to={viewPath(shelf.value)}
-              className={cn(
-                "flex items-center rounded-lg transition-colors",
-                mobile ? "gap-2 px-3 py-2 text-sm" : "gap-3 px-3 py-2 text-sm",
-                active
-                  ? "bg-muted font-medium text-foreground"
-                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-              )}
+    <div className="space-y-2">
+      <div ref={desktopFiltersRef} className="relative rounded-lg border bg-card p-2">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant={hasActiveFilters ? "secondary" : "outline"}
+              className="hidden lg:inline-flex"
+              onClick={() => setFiltersOpen((open) => !open)}
+              aria-expanded={filtersOpen}
             >
-              <span className="min-w-0">{shelf.label}</span>
-              <span
-                className={cn(
-                  "text-muted-foreground",
-                  mobile ? "text-sm" : "ml-auto text-xs"
-                )}
-              >
-                {counts[shelf.value] ?? 0}
-              </span>
-              {mobile && (
-                <ChevronRight className="ml-auto h-5 w-5 text-muted-foreground" aria-hidden="true" />
+              <Filter className="h-4 w-4" />
+              Filter
+              {hasActiveFilters && (
+                <span className="ml-0.5 rounded-full bg-background px-1.5 text-xs text-muted-foreground">
+                  {activeFilterChips.length}
+                </span>
               )}
-            </Link>
-          );
-        })}
+            </Button>
+            <Button
+              type="button"
+              variant={hasActiveFilters ? "secondary" : "outline"}
+              className="lg:hidden"
+              onClick={() => setMobileFiltersOpen(true)}
+              aria-expanded={mobileFiltersOpen}
+            >
+              <Filter className="h-4 w-4" />
+              Filter
+              {hasActiveFilters && (
+                <span className="ml-0.5 rounded-full bg-background px-1.5 text-xs text-muted-foreground">
+                  {activeFilterChips.length}
+                </span>
+              )}
+            </Button>
+          </div>
+
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder="Search books, authors, genres..."
+              className="pl-8"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={sort} onValueChange={(value) => onSortChange(value as LibrarySort)}>
+              <SelectTrigger className="w-full sm:w-[10.5rem]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="title">Title A-Z</SelectItem>
+                <SelectItem value="newest">Recently added</SelectItem>
+                <SelectItem value="rating">Rating high to low</SelectItem>
+                <SelectItem value="progress">Progress high to low</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <div className="flex rounded-lg border bg-background p-0.5 dark:bg-input/30">
+              <Button
+                type="button"
+                size="icon-sm"
+                variant={display === "grid" ? "secondary" : "ghost"}
+                aria-label="Grid view"
+                aria-pressed={display === "grid"}
+                onClick={() => onDisplayChange("grid")}
+              >
+                <Grid2X2 className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                size="icon-sm"
+                variant={display === "compact" ? "secondary" : "ghost"}
+                aria-label="Compact view"
+                aria-pressed={display === "compact"}
+                onClick={() => onDisplayChange("compact")}
+              >
+                <List className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {filtersOpen && (
+          <div className="absolute left-2 right-2 top-[calc(100%+0.5rem)] z-20 hidden rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg lg:block">
+            <LibraryFilterFields
+              filters={filters}
+              filterOptions={filterOptions}
+              onFilterChange={onFilterChange}
+            />
+            {hasActiveFilters && (
+              <div className="mt-3 flex justify-end">
+                <Button type="button" variant="ghost" size="sm" onClick={onClearFilters}>
+                  Clear filters
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <Dialog open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+          <DialogContent className="max-h-[min(42rem,calc(100%-2rem))] overflow-y-auto sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Filters</DialogTitle>
+            </DialogHeader>
+            <LibraryFilterFields
+              filters={filters}
+              filterOptions={filterOptions}
+              onFilterChange={onFilterChange}
+            />
+            <DialogFooter>
+              {hasActiveFilters && (
+                <Button type="button" variant="ghost" onClick={onClearFilters}>
+                  Clear filters
+                </Button>
+              )}
+              <Button type="button" onClick={() => setMobileFiltersOpen(false)}>
+                Done
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <div className="space-y-1 pt-3">
-        <p
-          className={cn(
-            "px-3 font-medium uppercase tracking-wide text-foreground",
-            mobile ? "pb-1 pt-2 text-xs" : "text-xs"
-          )}
-        >
-          Categories
-        </p>
-        {categoryShelves.map((shelf) => {
-          const active = activeView === shelf.value;
-          const count = categoryCounts[shelf.value];
-          const expanded = expandedShelf === shelf.value;
-          const values = shelfValues[shelf.value] ?? [];
-          const previewValues = values.slice(0, SHELF_VALUE_PREVIEW_LIMIT);
-          const hiddenValueCount = Math.max(values.length - SHELF_VALUE_PREVIEW_LIMIT, 0);
-          const showingFullShelf = showFocusedShelfList && active && !selectedValue;
-
-          return (
-            <div key={shelf.value} className="space-y-1">
+      {hasActiveFilters && (
+        <div className="flex flex-wrap items-center gap-2">
+          {activeFilterChips.map((chip) => (
+            <Badge key={chip.label} variant="secondary" className="gap-1 pr-1">
+              {chip.label}
               <button
                 type="button"
-                onClick={() => onToggleShelf(shelf.value)}
-                className={cn(
-                  "flex w-full items-center rounded-lg text-left transition-colors",
-                  mobile ? "gap-2 px-3 py-2 text-sm" : "px-3 py-2 text-sm",
-                  active
-                    ? "bg-muted font-medium text-foreground"
-                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                )}
-                aria-expanded={expanded}
+                className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                aria-label={`Remove ${chip.label}`}
+                onClick={() => onRemoveFilter(chip.keys)}
               >
-                <span className={cn("min-w-0", !mobile && "flex-1")}>{shelf.label}</span>
-                {count !== undefined && (
-                  <span className={cn("text-muted-foreground", mobile ? "text-sm" : "text-xs")}>
-                    {count}
-                  </span>
-                )}
-                {expanded ? (
-                  <ChevronDown className="ml-auto h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                ) : (
-                  <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                )}
+                <X className="h-3 w-3" />
               </button>
-
-              {expanded && (
-                <div className="space-y-1 pl-4">
-                  {previewValues.length === 0 ? (
-                    <p className="px-3 py-2 text-xs text-muted-foreground">No values yet</p>
-                  ) : (
-                    previewValues.map((value) => {
-                      const valueActive = active && selectedValue === value.name;
-
-                      return (
-                        <Link
-                          key={value.name}
-                          to={valuePath(shelf.value, value.name)}
-                          className={cn(
-                            "flex items-center gap-2 rounded-md px-3 py-1.5 text-xs transition-colors",
-                            valueActive
-                              ? "bg-muted font-medium text-foreground"
-                              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                          )}
-                        >
-                          <span className="min-w-0 flex-1 truncate">{value.name}</span>
-                          <span className="shrink-0 text-muted-foreground">{value.count}</span>
-                        </Link>
-                      );
-                    })
-                  )}
-                  {hiddenValueCount > 0 && !showingFullShelf && (
-                    <Button variant="ghost" size="sm" className="h-8 w-full justify-start px-3 text-xs" asChild>
-                      <Link to={valueListPath(shelf.value)}>View all</Link>
-                    </Button>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </nav>
+            </Badge>
+          ))}
+          <Button type="button" variant="ghost" size="sm" onClick={onClearFilters}>
+            Clear filters
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -578,6 +999,10 @@ function getViewLabel(view: LibraryView) {
   );
 }
 
+function activePrimaryShelfForView(view: LibraryView) {
+  return primaryShelves.find((shelf) => shelf.value === view);
+}
+
 export default function Library() {
   const { books, loading: booksLoading, error, reload } = useBooksContext();
   const { series, loading: seriesLoading } = useSeries();
@@ -585,55 +1010,39 @@ export default function Library() {
   const [notesLoading, setNotesLoading] = useState(false);
   const [notesLoaded, setNotesLoaded] = useState(false);
   const [notesError, setNotesError] = useState<string | null>(null);
-  const [expandedShelf, setExpandedShelf] = useState<LibraryValueShelf | undefined>();
-  const mobileShelfListRef = useRef<HTMLDivElement>(null);
-  const desktopShelfListRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const viewParam = searchParams.get("view");
-  const listParam = searchParams.get("list");
   const valueParam = searchParams.get("value")?.trim() || undefined;
+  const queryParam = searchParams.get("q") ?? "";
+  const sortParam = searchParams.get("sort");
+  const displayParam = searchParams.get("display");
+  const libraryFilters = useMemo(() => getLibraryFilters(searchParams), [searchParams]);
+  const activeFilterChips = useMemo(() => buildActiveFilterChips(libraryFilters), [libraryFilters]);
   const hasExplicitView = isLibraryView(viewParam);
   const activeView = hasExplicitView ? viewParam : undefined;
   const contentView = activeView ?? "all";
+  const libraryQuery = queryParam;
+  const librarySort: LibrarySort = isLibrarySort(sortParam) ? sortParam : "title";
+  const libraryDisplay: LibraryDisplay = isLibraryDisplay(displayParam) ? displayParam : "grid";
   const isNotesView = contentView === "notes";
   const activeCategoryShelf = categoryShelves.find((shelf) => shelf.value === contentView);
   const activeValueShelf = activeCategoryShelf?.value;
   const selectedValue = activeValueShelf ? valueParam : undefined;
-  const showFocusedShelfList = Boolean(activeValueShelf && listParam === "all");
-  const shouldLoadNotes = isNotesView || expandedShelf === "notes";
+  const showLibraryToolbar = Boolean(
+    !isNotesView && (activePrimaryShelfForView(contentView) || activeValueShelf || activeFilterChips.length)
+  );
+  const shouldLoadNotes = isNotesView;
   const loading = booksLoading || seriesLoading || (isNotesView && notesLoading);
   const contentHeading = getViewLabel(contentView);
+  const filterOptions = useMemo(() => buildLibraryFilterOptions(books), [books]);
 
   useEffect(() => {
     if (viewParam && !isLibraryView(viewParam)) {
       navigate("/library", { replace: true });
     }
   }, [navigate, viewParam]);
-
-  useEffect(() => {
-    if (activeValueShelf && selectedValue) {
-      setExpandedShelf(activeValueShelf);
-    }
-  }, [activeValueShelf, selectedValue]);
-
-  useEffect(() => {
-    function closeOnOutsideClick(event: MouseEvent) {
-      if (selectedValue) return;
-      const clickTarget = event.target as Node;
-      const clickedInsideShelfList =
-        mobileShelfListRef.current?.contains(clickTarget) ||
-        desktopShelfListRef.current?.contains(clickTarget);
-
-      if (!clickedInsideShelfList) {
-        setExpandedShelf(undefined);
-      }
-    }
-
-    document.addEventListener("mousedown", closeOnOutsideClick);
-    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
-  }, [selectedValue]);
 
   useEffect(() => {
     if (!shouldLoadNotes || notesLoaded) return;
@@ -671,82 +1080,95 @@ export default function Library() {
     setNotesError(null);
   }
 
-  function toggleShelf(shelf: LibraryValueShelf) {
-    setExpandedShelf((currentShelf) => (currentShelf === shelf ? undefined : shelf));
-    navigate(viewPath(shelf));
+  function updateLibraryParam(key: "q" | "sort" | "display", value: string) {
+    const nextParams = new URLSearchParams(searchParams);
+    const normalizedValue = key === "q" ? value.trim() : value;
+    const isDefaultValue =
+      !normalizedValue ||
+      (key === "sort" && normalizedValue === "title") ||
+      (key === "display" && normalizedValue === "grid");
+
+    if (isDefaultValue) {
+      nextParams.delete(key);
+    } else {
+      nextParams.set(key, normalizedValue);
+    }
+
+    setSearchParams(nextParams, { replace: true });
   }
 
-  const primaryCounts = useMemo(
-    () =>
-      primaryShelves.reduce(
-        (counts, shelf) => ({
-          ...counts,
-          [shelf.value]: books.filter(shelf.matches).length,
-        }),
-        {} as Partial<Record<LibraryView, number>>
-      ),
-    [books]
-  );
+  function updateLibraryFilter(key: LibraryFilterKey, value: string) {
+    const nextParams = new URLSearchParams(searchParams);
+    const normalizedValue = value.trim();
 
-  const categoryCounts = useMemo(
-    () => ({
-      series: series.filter((item) => books.some((book) => book.series_id === item.id)).length,
-      authors: countUniqueBookValues(books, (book) => book.authors),
-      genres: countUniqueBookValues(books, (book) => book.genres),
-      rating: buildRatingGroups(books).length,
-      notes: notesLoaded ? notes.length : undefined,
-      languages: new Set(books.map((book) => book.language).filter(Boolean)).size,
-      format: new Set(books.map((book) => book.format).filter(Boolean)).size,
-      "belongs-to": new Set(books.map((book) => book.belongs_to).filter(Boolean)).size,
-    }),
-    [books, notes.length, notesLoaded, series]
-  );
+    if (normalizedValue) {
+      nextParams.set(key, normalizedValue);
+    } else {
+      nextParams.delete(key);
+    }
 
-  const shelfValues = useMemo(
-    () =>
-      categoryShelves.reduce(
-        (values, shelf) => ({
-          ...values,
-          [shelf.value]: buildShelfValueSummaries({
-            shelf: shelf.value,
-            books,
-            series,
-            notes,
-          }),
-        }),
-        {} as Partial<Record<LibraryValueShelf, ShelfValueSummary[]>>
-      ),
-    [books, notes, series]
-  );
+    setSearchParams(nextParams, { replace: true });
+  }
 
-  const activePrimaryShelf = primaryShelves.find((shelf) => shelf.value === contentView);
+  function removeLibraryFilters(keys: LibraryFilterKey[]) {
+    const nextParams = new URLSearchParams(searchParams);
+    keys.forEach((key) => nextParams.delete(key));
+    setSearchParams(nextParams, { replace: true });
+  }
+
+  function clearLibraryFilters() {
+    const nextParams = new URLSearchParams(searchParams);
+    filterKeys.forEach((key) => nextParams.delete(key));
+    setSearchParams(nextParams, { replace: true });
+  }
+
+  const activePrimaryShelf = activePrimaryShelfForView(contentView);
   const visibleBooks = useMemo(() => {
     if (!activePrimaryShelf) return [];
-    return sortBooksByTitle(books.filter(activePrimaryShelf.matches));
-  }, [activePrimaryShelf, books]);
+    return filterAndSortBooks({
+      books: applyLibraryFilters(books.filter(activePrimaryShelf.matches), libraryFilters),
+      series,
+      query: libraryQuery,
+      sort: librarySort,
+    });
+  }, [activePrimaryShelf, books, libraryFilters, libraryQuery, librarySort, series]);
 
   const filteredBooks = useMemo(() => {
     if (!activeValueShelf || !selectedValue || activeValueShelf === "notes") return [];
-    return filterBooksByShelfValue({
-      shelf: activeValueShelf,
-      value: selectedValue,
-      books,
+    return filterAndSortBooks({
+      books: applyLibraryFilters(
+        filterBooksByShelfValue({
+          shelf: activeValueShelf,
+          value: selectedValue,
+          books,
+          series,
+        }),
+        libraryFilters,
+      ),
       series,
+      query: libraryQuery,
+      sort: librarySort,
     });
-  }, [activeValueShelf, books, selectedValue, series]);
+  }, [activeValueShelf, books, libraryFilters, libraryQuery, librarySort, selectedValue, series]);
 
   const groupedBooks = useMemo(() => {
-    if (contentView === "series") return buildSeriesGroups(books, series);
-    if (contentView === "authors") return buildMultiValueGroups(books, (book) => book.authors);
-    if (contentView === "genres") return buildMultiValueGroups(books, (book) => book.genres);
-    if (contentView === "rating") return buildRatingGroups(books);
-    if (contentView === "languages") return buildSingleValueGroups(books, (book) => book.language);
-    if (contentView === "format") return buildSingleValueGroups(books, (book) => book.format);
+    const filterableBooks = filterAndSortBooks({
+      books: applyLibraryFilters(books, libraryFilters),
+      series,
+      query: libraryQuery,
+      sort: librarySort,
+    });
+    if (contentView === "series") return buildSeriesGroups(filterableBooks, series);
+    if (contentView === "authors") return buildMultiValueGroups(filterableBooks, (book) => book.authors);
+    if (contentView === "genres") return buildMultiValueGroups(filterableBooks, (book) => book.genres);
+    if (contentView === "rating") return buildRatingGroups(filterableBooks);
+    if (contentView === "languages") return buildSingleValueGroups(filterableBooks, (book) => book.language);
+    if (contentView === "format") return buildSingleValueGroups(filterableBooks, (book) => book.format);
     if (contentView === "belongs-to") {
-      return buildSingleValueGroups(books, (book) => book.belongs_to);
+      return buildSingleValueGroups(filterableBooks, (book) => book.belongs_to);
     }
     return [];
-  }, [contentView, books, series]);
+  }, [contentView, books, libraryFilters, libraryQuery, librarySort, series]);
 
   const groupedNotes = useMemo(() => {
     if (isNotesView && selectedValue) {
@@ -766,16 +1188,19 @@ export default function Library() {
       return itemCountLabel(groupedNotes.reduce((count, group) => count + group.notes.length, 0), "entry", "entries");
     }
     if (selectedValue) return itemCountLabel(filteredBooks.length, "book");
-    if (contentView === "series") return itemCountLabel(categoryCounts.series ?? 0, "series", "series");
-    if (contentView === "authors") return itemCountLabel(categoryCounts.authors ?? 0, "author");
-    if (contentView === "genres") return itemCountLabel(categoryCounts.genres ?? 0, "genre");
-    if (contentView === "rating") return itemCountLabel(books.length, "book");
+    if (contentView === "series") return itemCountLabel(groupedBooks.length, "series", "series");
+    if (contentView === "authors") return itemCountLabel(groupedBooks.length, "author");
+    if (contentView === "genres") return itemCountLabel(groupedBooks.length, "genre");
+    if (contentView === "rating") {
+      return itemCountLabel(groupedBooks.reduce((count, group) => count + group.books.length, 0), "book");
+    }
     if (contentView === "notes") return itemCountLabel(notes.length, "entry", "entries");
     return itemCountLabel(books.length, "book");
   })();
+  const hasActiveFilters = activeFilterChips.length > 0;
 
   return (
-    <div className="space-y-4 md:flex md:h-[calc(100svh-6.5rem)] md:min-h-0 md:flex-col">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-heading leading-snug font-medium">
           Library
@@ -784,6 +1209,23 @@ export default function Library() {
           {loading ? "..." : displayedCountLabel}
         </span>
       </div>
+
+      {showLibraryToolbar && (
+        <LibraryToolbar
+          query={libraryQuery}
+          sort={librarySort}
+          display={libraryDisplay}
+          filters={libraryFilters}
+          filterOptions={filterOptions}
+          activeFilterChips={activeFilterChips}
+          onQueryChange={(query) => updateLibraryParam("q", query)}
+          onSortChange={(sort) => updateLibraryParam("sort", sort)}
+          onDisplayChange={(display) => updateLibraryParam("display", display)}
+          onFilterChange={updateLibraryFilter}
+          onRemoveFilter={removeLibraryFilters}
+          onClearFilters={clearLibraryFilters}
+        />
+      )}
 
       {error && (
         <div className="flex flex-col items-center gap-3 py-8 text-center">
@@ -805,82 +1247,46 @@ export default function Library() {
         </div>
       )}
 
-      <div className="md:hidden">
-        {!hasExplicitView || showFocusedShelfList ? (
-          <div ref={mobileShelfListRef}>
-            <LibraryShelfList
-              activeView={activeView}
-              selectedValue={selectedValue}
-              showFocusedShelfList={showFocusedShelfList}
-              expandedShelf={expandedShelf}
-              onToggleShelf={toggleShelf}
-              counts={primaryCounts}
-              categoryCounts={categoryCounts}
-              shelfValues={shelfValues}
-              mobile
+      <section className="min-w-0">
+        <h2 className="mb-6 text-xl font-heading font-medium leading-snug text-muted-foreground">
+          {selectedValue ?? contentHeading}
+        </h2>
+        {loading ? (
+          <LoadingGrid />
+        ) : activePrimaryShelf ? (
+          visibleBooks.length === 0 ? (
+            <EmptyLibraryView
+              message={
+                normalizeSearchText(libraryQuery)
+                  ? "No books match your search."
+                  : hasActiveFilters
+                    ? "No books match your filters."
+                  : activePrimaryShelf.emptyMessage
+              }
             />
-          </div>
-        ) : (
-          <Button variant="ghost" size="sm" asChild>
-            <Link to="/library">
-              <ChevronLeft className="mr-2 h-4 w-4" />
-              Library
-            </Link>
-          </Button>
-        )}
-      </div>
-
-      <div
-        className={cn(
-          "grid gap-4 md:min-h-0 md:flex-1 md:grid-cols-[12rem_minmax(0,1fr)] lg:grid-cols-[13rem_minmax(0,1fr)]",
-          !hasExplicitView && "hidden md:grid"
-        )}
-      >
-        <aside className="hidden md:block md:min-h-0 md:overflow-y-auto md:pr-1">
-          <div ref={desktopShelfListRef}>
-            <LibraryShelfList
-              activeView={activeView}
-              selectedValue={selectedValue}
-              showFocusedShelfList={showFocusedShelfList}
-              expandedShelf={expandedShelf}
-              onToggleShelf={toggleShelf}
-              counts={primaryCounts}
-              categoryCounts={categoryCounts}
-              shelfValues={shelfValues}
-            />
-          </div>
-        </aside>
-
-        <section className="min-w-0 md:min-h-0 md:overflow-y-auto md:pr-1">
-          {!selectedValue && (
-            <h2 className="mb-6 text-xl font-heading font-medium leading-snug text-muted-foreground">
-              {contentHeading}
-            </h2>
-          )}
-          {loading ? (
-            <LoadingGrid />
-          ) : activePrimaryShelf ? (
-            visibleBooks.length === 0 ? (
-              <EmptyLibraryView message={activePrimaryShelf.emptyMessage} />
-            ) : (
-              <BooksGrid books={visibleBooks} onBook={openBook} />
-            )
-          ) : selectedValue && activeValueShelf && activeValueShelf !== "notes" ? (
-            filteredBooks.length === 0 ? (
-              <EmptyLibraryView message={`No books found for ${selectedValue}.`} />
-            ) : (
-              <GroupedBooksView
-                groups={[{ name: selectedValue, books: filteredBooks }]}
-                onBook={openBook}
-              />
-            )
-          ) : isNotesView ? (
-            notesError ? null : <GroupedNotesView groups={groupedNotes} onBook={openBook} />
           ) : (
-            <GroupedBooksView groups={groupedBooks} onBook={openBook} />
-          )}
-        </section>
-      </div>
+            <BooksView books={visibleBooks} display={libraryDisplay} onBook={openBook} />
+          )
+        ) : selectedValue && activeValueShelf && activeValueShelf !== "notes" ? (
+          filteredBooks.length === 0 ? (
+            <EmptyLibraryView
+              message={
+                normalizeSearchText(libraryQuery)
+                  ? `No books match your search in ${selectedValue}.`
+                  : hasActiveFilters
+                    ? `No books match your filters in ${selectedValue}.`
+                  : `No books found for ${selectedValue}.`
+              }
+            />
+          ) : (
+            <BooksView books={filteredBooks} display={libraryDisplay} onBook={openBook} />
+          )
+        ) : isNotesView ? (
+          notesError ? null : <GroupedNotesView groups={groupedNotes} onBook={openBook} />
+        ) : (
+          <GroupedBooksView groups={groupedBooks} onBook={openBook} />
+        )}
+      </section>
     </div>
   );
 }
