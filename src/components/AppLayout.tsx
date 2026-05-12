@@ -1,16 +1,32 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ComponentType } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  Plus,
+  BarChart3,
+  BookMarked,
+  BookOpen,
+  Bookmark,
+  CheckCircle2,
   LayoutDashboard,
   Library,
+  Menu,
+  Plus,
   Search,
-  BarChart3,
+  Settings,
+  UserRound,
   Users,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { BooksProvider } from "@/context/BooksContext";
 import { ProfileProvider } from "@/context/ProfileContext";
 import { useAuth, useProfile } from "@/context";
@@ -19,14 +35,60 @@ import readingJournalLogo from "@/assets/reading-journal-logo.png";
 
 const AddBookDialog = lazy(() => import("./AddBookDialog"));
 
-const navLinks = [
+type NavLink = {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+};
+
+const sidebarNavLinks: NavLink[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/library", label: "Library", icon: Library },
-  { to: "/analytics", label: "Analytics", icon: BarChart3 },
+  { to: "/library?view=all", label: "My Books", icon: Library },
+  { to: "/library?view=reading", label: "Currently Reading", icon: BookOpen },
+  { to: "/library?view=tbr", label: "Want to Read", icon: Bookmark },
+  { to: "/library?view=finished", label: "Read", icon: CheckCircle2 },
+  { to: "/library?view=series", label: "Series", icon: BookMarked },
+  { to: "/library?view=authors", label: "Authors", icon: UserRound },
+  { to: "/analytics", label: "Stats", icon: BarChart3 },
+  { to: "/shelves", label: "Shelves", icon: Bookmark },
+  { to: "/settings/profile", label: "Settings", icon: Settings },
 ];
 
-function isActiveRoute(pathname: string, to: string): boolean {
-  return to === "/" ? pathname === "/" : pathname.startsWith(to);
+const mobilePrimaryLinks: NavLink[] = [
+  { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/library", label: "Books", icon: Library },
+  { to: "/analytics", label: "Stats", icon: BarChart3 },
+];
+
+const mobileMenuLinks: NavLink[] = [
+  { to: "/search", label: "Search", icon: Search },
+  { to: "/library?view=all", label: "My Books", icon: Library },
+  { to: "/library?view=reading", label: "Currently Reading", icon: BookOpen },
+  { to: "/library?view=tbr", label: "Want to Read", icon: Bookmark },
+  { to: "/library?view=finished", label: "Read", icon: CheckCircle2 },
+  { to: "/library?view=series", label: "Series", icon: BookMarked },
+  { to: "/library?view=authors", label: "Authors", icon: UserRound },
+  { to: "/shelves", label: "Shelves", icon: Bookmark },
+  { to: "/groups", label: "Groups", icon: Users },
+  { to: "/settings/profile", label: "Settings", icon: Settings },
+];
+
+function isActiveRoute(pathname: string, search: string, to: string): boolean {
+  const [targetPathname, targetSearch = ""] = to.split("?");
+
+  if (targetPathname === "/") return pathname === "/";
+  if (pathname !== targetPathname && !pathname.startsWith(`${targetPathname}/`)) {
+    return false;
+  }
+
+  const targetParams = new URLSearchParams(targetSearch);
+  const targetView = targetParams.get("view");
+
+  if (!targetView) return pathname === targetPathname || pathname.startsWith(`${targetPathname}/`);
+
+  const currentParams = new URLSearchParams(search);
+  const currentView = currentParams.get("view") ?? "all";
+  return currentView === targetView;
 }
 
 function getDisplayName(
@@ -59,15 +121,18 @@ type ProfileMenuProps = {
 
 type AppHeaderProps = {
   pathname: string;
+  search: string;
   onAddBookClick: () => void;
   profileMenuProps: ProfileMenuProps;
 };
 
 type AppShellProps = {
   pathname: string;
+  search: string;
   addBookOpen: boolean;
   onAddBookOpenChange: (open: boolean) => void;
   appHeaderProps: AppHeaderProps;
+  desktopProfileMenuProps: ProfileMenuProps;
 };
 
 function AppLayoutContent() {
@@ -75,41 +140,62 @@ function AppLayoutContent() {
   const { profile } = useProfile();
   const location = useLocation();
   const navigate = useNavigate();
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const desktopDropdownRef = useRef<HTMLDivElement>(null);
+  const mobileDropdownRef = useRef<HTMLDivElement>(null);
   const [addBookOpen, setAddBookOpen] = useState(false);
-  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [desktopAvatarMenuOpen, setDesktopAvatarMenuOpen] = useState(false);
+  const [mobileAvatarMenuOpen, setMobileAvatarMenuOpen] = useState(false);
   const displayName = getDisplayName(profile, user?.email);
 
   useEffect(() => {
-    if (!avatarMenuOpen) return;
+    if (!desktopAvatarMenuOpen && !mobileAvatarMenuOpen) return;
 
     function handlePointerDown(event: PointerEvent) {
-      if (!dropdownRef.current?.contains(event.target as Node)) {
-        setAvatarMenuOpen(false);
+      const target = event.target as Node;
+
+      if (!desktopDropdownRef.current?.contains(target)) {
+        setDesktopAvatarMenuOpen(false);
+      }
+
+      if (!mobileDropdownRef.current?.contains(target)) {
+        setMobileAvatarMenuOpen(false);
       }
     }
 
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [avatarMenuOpen]);
+  }, [desktopAvatarMenuOpen, mobileAvatarMenuOpen]);
 
   function navigateFromAvatarMenu(path: string) {
-    setAvatarMenuOpen(false);
+    setDesktopAvatarMenuOpen(false);
+    setMobileAvatarMenuOpen(false);
     navigate(path);
   }
 
   async function signOutFromAvatarMenu() {
-    setAvatarMenuOpen(false);
+    setDesktopAvatarMenuOpen(false);
+    setMobileAvatarMenuOpen(false);
     await signOut();
   }
 
-  const profileMenuProps: ProfileMenuProps = {
+  const desktopProfileMenuProps: ProfileMenuProps = {
     profile,
     email: user?.email,
     displayName,
-    open: avatarMenuOpen,
-    dropdownRef,
-    onToggle: () => setAvatarMenuOpen((open) => !open),
+    open: desktopAvatarMenuOpen,
+    dropdownRef: desktopDropdownRef,
+    onToggle: () => setDesktopAvatarMenuOpen((open) => !open),
+    onNavigate: navigateFromAvatarMenu,
+    onSignOut: () => void signOutFromAvatarMenu(),
+  };
+
+  const mobileProfileMenuProps: ProfileMenuProps = {
+    profile,
+    email: user?.email,
+    displayName,
+    open: mobileAvatarMenuOpen,
+    dropdownRef: mobileDropdownRef,
+    onToggle: () => setMobileAvatarMenuOpen((open) => !open),
     onNavigate: navigateFromAvatarMenu,
     onSignOut: () => void signOutFromAvatarMenu(),
   };
@@ -117,34 +203,47 @@ function AppLayoutContent() {
   return (
     <AppShell
       pathname={location.pathname}
+      search={location.search}
       addBookOpen={addBookOpen}
       onAddBookOpenChange={setAddBookOpen}
       appHeaderProps={{
         pathname: location.pathname,
+        search: location.search,
         onAddBookClick: () => setAddBookOpen(true),
-        profileMenuProps,
+        profileMenuProps: mobileProfileMenuProps,
       }}
+      desktopProfileMenuProps={desktopProfileMenuProps}
     />
   );
 }
 
 function AppShell({
   pathname,
+  search,
   addBookOpen,
   onAddBookOpenChange,
   appHeaderProps,
+  desktopProfileMenuProps,
 }: AppShellProps) {
   return (
     <>
-      <div className="min-h-svh flex flex-col">
-        <AppHeader {...appHeaderProps} />
+      <div className="min-h-svh bg-background text-foreground md:flex">
+        <DesktopSidebar
+          pathname={pathname}
+          search={search}
+          onAddBookClick={appHeaderProps.onAddBookClick}
+        />
 
-        {/* Page content */}
-        <main className="flex-1 mx-auto w-full max-w-4xl px-4 py-6 pb-20 md:pb-6">
-          <Outlet />
-        </main>
+        <div className="flex min-h-svh min-w-0 flex-1 flex-col">
+          <MobileHeader {...appHeaderProps} />
+          <DesktopUtilityBar profileMenuProps={desktopProfileMenuProps} />
 
-        <MobileNav pathname={pathname} />
+          <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-5 pb-24 sm:px-6 md:px-8 md:py-8 md:pb-8 lg:px-10">
+            <Outlet />
+          </main>
+
+          <MobileBottomNav pathname={pathname} search={search} />
+        </div>
       </div>
 
       <Suspense fallback={null}>
@@ -156,29 +255,87 @@ function AppShell({
   );
 }
 
-function AppHeader({
+function DesktopSidebar({
   pathname,
+  search,
+  onAddBookClick,
+}: {
+  pathname: string;
+  search: string;
+  onAddBookClick: () => void;
+}) {
+  return (
+    <aside className="sticky top-0 hidden h-svh w-64 shrink-0 border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex md:flex-col">
+      <div className="flex h-16 items-center gap-2 px-5">
+        <img
+          src={readingJournalLogo}
+          alt="Reading Journal logo"
+          className="h-7 w-7 rounded-sm object-cover dark:brightness-0 dark:invert"
+        />
+        <span className="font-heading text-sm font-medium">Reading Journal</span>
+      </div>
+
+      <div className="px-4 pb-4">
+        <Button className="w-full justify-start gap-2" onClick={onAddBookClick}>
+          <Plus className="h-4 w-4" />
+          Add Book
+        </Button>
+      </div>
+
+      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-4">
+        {sidebarNavLinks.map((link) => (
+          <NavItem
+            key={link.to}
+            link={link}
+            active={isActiveRoute(pathname, search, link.to)}
+          />
+        ))}
+      </nav>
+    </aside>
+  );
+}
+
+function DesktopUtilityBar({
+  profileMenuProps,
+}: {
+  profileMenuProps: ProfileMenuProps;
+}) {
+  return (
+    <header className="sticky top-0 z-40 hidden h-14 items-center justify-end border-b bg-background/95 px-8 backdrop-blur supports-[backdrop-filter]:bg-background/75 md:flex lg:px-10">
+      <div className="flex items-center gap-1">
+        <Button size="icon" variant="ghost" asChild>
+          <Link to="/search" aria-label="Search">
+            <Search className="h-5 w-5" />
+          </Link>
+        </Button>
+        <ProfileMenu {...profileMenuProps} />
+      </div>
+    </header>
+  );
+}
+
+function MobileHeader({
+  pathname,
+  search,
   onAddBookClick,
   profileMenuProps,
 }: AppHeaderProps) {
   return (
-    /* Top header */
-    <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto flex h-14 max-w-4xl items-center gap-4 px-4">
-        {/* Logo / app name */}
+    <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75 md:hidden">
+      <div className="flex h-14 items-center gap-2 px-4">
+        <MobileMenu pathname={pathname} search={search} />
+
         <Link
           to="/"
-          className="flex items-center gap-2 font-semibold text-foreground"
+          className="flex min-w-0 items-center gap-2 font-semibold text-foreground"
         >
           <img
             src={readingJournalLogo}
             alt="Reading Journal logo"
             className="h-6 w-6 rounded-sm object-cover dark:brightness-0 dark:invert"
           />
-          <span className="hidden sm:inline">Reading Journal</span>
+          <span className="truncate text-sm">Reading Journal</span>
         </Link>
-
-        <DesktopNav pathname={pathname} />
 
         <div className="ml-auto flex items-center gap-1">
           <Button
@@ -189,16 +346,6 @@ function AppHeader({
           >
             <Plus className="h-5 w-5" />
           </Button>
-          <Button size="icon" variant="ghost" asChild>
-            <Link to="/search" aria-label="Search">
-              <Search className="h-5 w-5" />
-            </Link>
-          </Button>
-          <Button size="icon" variant="ghost" aria-label="Groups" title="Groups" asChild>
-            <Link to="/groups">
-              <Users className="h-5 w-5" />
-            </Link>
-          </Button>
           <ProfileMenu {...profileMenuProps} />
         </div>
       </div>
@@ -206,46 +353,62 @@ function AppHeader({
   );
 }
 
-function DesktopNav({ pathname }: { pathname: string }) {
+function MobileMenu({ pathname, search }: { pathname: string; search: string }) {
+  const [open, setOpen] = useState(false);
+
   return (
-    /* Desktop nav links */
-    <nav className="hidden md:flex items-center gap-1 ml-2">
-      {navLinks.map(({ to, label }) => {
-        const active = isActiveRoute(pathname, to);
-        return (
-          <Link
-            key={to}
-            to={to}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-sm transition-colors",
-              active
-                ? "bg-muted font-medium text-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            )}
-          >
-            {label}
-          </Link>
-        );
-      })}
-    </nav>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <Button
+        size="icon"
+        variant="ghost"
+        aria-label="Open navigation menu"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen(true)}
+      >
+        <Menu className="h-5 w-5" />
+      </Button>
+      <DialogContent
+        showCloseButton={false}
+        className="left-0 top-0 h-svh max-w-80 translate-x-0 translate-y-0 content-start gap-0 rounded-none border-r bg-background p-0"
+      >
+        <DialogHeader className="flex-row items-center justify-between border-b px-4 py-3">
+          <DialogTitle>Menu</DialogTitle>
+          <DialogClose asChild>
+            <Button size="icon-sm" variant="ghost" aria-label="Close navigation menu">
+              <X className="h-4 w-4" />
+            </Button>
+          </DialogClose>
+        </DialogHeader>
+
+        <nav className="space-y-1 overflow-y-auto p-3">
+          {mobileMenuLinks.map((link) => (
+            <DialogClose asChild key={link.to}>
+              <NavItem
+                link={link}
+                active={isActiveRoute(pathname, search, link.to)}
+                className="text-sm"
+              />
+            </DialogClose>
+          ))}
+        </nav>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-function MobileNav({ pathname }: { pathname: string }) {
+function MobileBottomNav({ pathname, search }: { pathname: string; search: string }) {
   return (
-    /* Mobile bottom nav */
-    <nav className="fixed bottom-0 left-0 right-0 z-50 flex border-t bg-background md:hidden">
-      {navLinks.map(({ to, label, icon: Icon }: { to: string; label: string; icon: LucideIcon }) => {
-        const active = isActiveRoute(pathname, to);
+    <nav className="fixed bottom-0 left-0 right-0 z-40 flex border-t bg-background md:hidden">
+      {mobilePrimaryLinks.map(({ to, label, icon: Icon }) => {
+        const active = isActiveRoute(pathname, search, to);
         return (
           <Link
             key={to}
             to={to}
             className={cn(
               "flex flex-1 flex-col items-center gap-1 py-3 text-xs transition-colors",
-              active
-                ? "text-foreground font-medium"
-                : "text-muted-foreground"
+              active ? "font-medium text-foreground" : "text-muted-foreground"
             )}
           >
             <Icon className="h-5 w-5" />
@@ -254,6 +417,34 @@ function MobileNav({ pathname }: { pathname: string }) {
         );
       })}
     </nav>
+  );
+}
+
+function NavItem({
+  link,
+  active,
+  className,
+}: {
+  link: NavLink;
+  active: boolean;
+  className?: string;
+}) {
+  const Icon = link.icon as ComponentType<{ className?: string }>;
+
+  return (
+    <Link
+      to={link.to}
+      className={cn(
+        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+        active
+          ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+          : "text-sidebar-foreground/75 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
+        className
+      )}
+    >
+      <Icon className="h-4 w-4" />
+      <span className="truncate">{link.label}</span>
+    </Link>
   );
 }
 
@@ -283,7 +474,7 @@ function ProfileMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full mt-2 w-56 overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-lg"
+          className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-lg"
         >
           <div className="border-b px-3 py-2">
             <p className="truncate text-sm font-medium">{displayName}</p>
@@ -307,6 +498,7 @@ function ProfileMenu({
           >
             Settings
           </button>
+          <Separator />
           <button
             type="button"
             role="menuitem"
