@@ -130,13 +130,13 @@ const validDisplays = new Set<LibraryDisplay>(["grid", "compact"]);
 const primaryShelves: PrimaryShelf[] = [
   {
     value: "all",
-    label: "All Books",
+    label: "My Books",
     matches: () => true,
     emptyMessage: "No books yet. Tap + to add one.",
   },
   {
     value: "tbr",
-    label: "To Be Read",
+    label: "Want to Read",
     matches: (book) => ["Wishlist", "Not Started", "Up Next"].includes(book.status),
     emptyMessage: "No books in your reading list.",
   },
@@ -175,6 +175,14 @@ const categoryShelves: CategoryShelf[] = [
   { value: "languages", label: "Languages" },
   { value: "format", label: "Format" },
   { value: "belongs-to", label: "Belongs to" },
+];
+
+const statusTabs: Array<Pick<PrimaryShelf, "value" | "label">> = [
+  { value: "all", label: "All" },
+  { value: "reading", label: "Currently Reading" },
+  { value: "tbr", label: "Want to Read" },
+  { value: "finished", label: "Read" },
+  { value: "dnf", label: "DNF" },
 ];
 
 const validViews = new Set<LibraryView>([
@@ -656,6 +664,46 @@ function LibraryFilterFields({
   );
 }
 
+function LibraryStatusTabs({
+  activeView,
+  onViewChange,
+}: {
+  activeView: LibraryView;
+  onViewChange: (view: LibraryView) => void;
+}) {
+  return (
+    <div className="overflow-x-auto border-b">
+      <div className="flex min-w-max items-center gap-6 px-0.5">
+        {statusTabs.map((tab) => {
+          const isActive = activeView === tab.value;
+
+          return (
+            <button
+              key={tab.value}
+              type="button"
+              className={cn(
+                "relative py-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                isActive && "text-foreground",
+              )}
+              aria-current={isActive ? "page" : undefined}
+              onClick={() => onViewChange(tab.value)}
+            >
+              {tab.label}
+              <span
+                className={cn(
+                  "absolute inset-x-0 bottom-[-1px] h-0.5 rounded-full bg-foreground opacity-0 transition-opacity",
+                  isActive && "opacity-100",
+                )}
+              />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function LibraryToolbar({
   query,
   sort,
@@ -707,8 +755,8 @@ function LibraryToolbar({
 
   return (
     <div className="space-y-2">
-      <div ref={desktopFiltersRef} className="relative rounded-lg border bg-card p-2">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+      <div ref={desktopFiltersRef} className="relative">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
@@ -740,21 +788,9 @@ function LibraryToolbar({
                 </span>
               )}
             </Button>
-          </div>
 
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(event) => onQueryChange(event.target.value)}
-              placeholder="Search books, authors, genres..."
-              className="pl-8"
-            />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
             <Select value={sort} onValueChange={(value) => onSortChange(value as LibrarySort)}>
-              <SelectTrigger className="w-full sm:w-[10.5rem]">
+              <SelectTrigger className="w-[10.5rem]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -764,6 +800,18 @@ function LibraryToolbar({
                 <SelectItem value="progress">Progress high to low</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center lg:justify-end">
+            <div className="relative min-w-0 sm:w-64 lg:w-72">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(event) => onQueryChange(event.target.value)}
+                placeholder="Search books, authors, genres..."
+                className="pl-8"
+              />
+            </div>
 
             <div className="flex rounded-lg border bg-background p-0.5 dark:bg-input/30">
               <Button
@@ -791,7 +839,7 @@ function LibraryToolbar({
         </div>
 
         {filtersOpen && (
-          <div className="absolute left-2 right-2 top-[calc(100%+0.5rem)] z-20 hidden rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg lg:block">
+          <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 hidden rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg lg:block">
             <LibraryFilterFields
               filters={filters}
               filterOptions={filterOptions}
@@ -1035,7 +1083,7 @@ export default function Library() {
   );
   const shouldLoadNotes = isNotesView;
   const loading = booksLoading || seriesLoading || (isNotesView && notesLoading);
-  const contentHeading = getViewLabel(contentView);
+  const pageTitle = selectedValue ?? getViewLabel(contentView);
   const filterOptions = useMemo(() => buildLibraryFilterOptions(books), [books]);
 
   useEffect(() => {
@@ -1094,6 +1142,13 @@ export default function Library() {
       nextParams.set(key, normalizedValue);
     }
 
+    setSearchParams(nextParams, { replace: true });
+  }
+
+  function updateLibraryView(view: LibraryView) {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("view", view);
+    nextParams.delete("value");
     setSearchParams(nextParams, { replace: true });
   }
 
@@ -1198,17 +1253,22 @@ export default function Library() {
     return itemCountLabel(books.length, "book");
   })();
   const hasActiveFilters = activeFilterChips.length > 0;
+  const showStatusTabs = statusTabs.some((tab) => tab.value === contentView);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-heading leading-snug font-medium">
-          Library
+          {pageTitle}
         </h1>
         <span className="text-sm text-muted-foreground">
           {loading ? "..." : displayedCountLabel}
         </span>
       </div>
+
+      {showStatusTabs && (
+        <LibraryStatusTabs activeView={contentView} onViewChange={updateLibraryView} />
+      )}
 
       {showLibraryToolbar && (
         <LibraryToolbar
@@ -1248,9 +1308,6 @@ export default function Library() {
       )}
 
       <section className="min-w-0">
-        <h2 className="mb-6 text-xl font-heading font-medium leading-snug text-muted-foreground">
-          {selectedValue ?? contentHeading}
-        </h2>
         {loading ? (
           <LoadingGrid />
         ) : activePrimaryShelf ? (
