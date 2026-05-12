@@ -3,9 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
   BookMarked,
-  BookOpen,
   Bookmark,
-  CheckCircle2,
   LayoutDashboard,
   Library,
   Menu,
@@ -44,9 +42,6 @@ type NavLink = {
 const sidebarNavLinks: NavLink[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/library?view=all", label: "My Books", icon: Library },
-  { to: "/library?view=reading", label: "Currently Reading", icon: BookOpen },
-  { to: "/library?view=tbr", label: "Want to Read", icon: Bookmark },
-  { to: "/library?view=finished", label: "Read", icon: CheckCircle2 },
   { to: "/library?view=series", label: "Series", icon: BookMarked },
   { to: "/library?view=authors", label: "Authors", icon: UserRound },
   { to: "/analytics", label: "Stats", icon: BarChart3 },
@@ -63,9 +58,6 @@ const mobilePrimaryLinks: NavLink[] = [
 const mobileMenuLinks: NavLink[] = [
   { to: "/search", label: "Search", icon: Search },
   { to: "/library?view=all", label: "My Books", icon: Library },
-  { to: "/library?view=reading", label: "Currently Reading", icon: BookOpen },
-  { to: "/library?view=tbr", label: "Want to Read", icon: Bookmark },
-  { to: "/library?view=finished", label: "Read", icon: CheckCircle2 },
   { to: "/library?view=series", label: "Series", icon: BookMarked },
   { to: "/library?view=authors", label: "Authors", icon: UserRound },
   { to: "/shelves", label: "Shelves", icon: Bookmark },
